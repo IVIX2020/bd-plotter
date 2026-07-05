@@ -1,0 +1,476 @@
+@font-face {
+  font-family: 'Virgil';
+  src: url('https://excalidraw.com/Virgil.woff2') format('woff2');
+  font-display: swap;
+}
+
+:root {
+  --bg-canvas: #121212;
+  --bg-panel: #1e1e1e;
+  --text-main: #e0e0e0;
+  --text-muted: #888888;
+  --border-color: #333333;
+  --accent: #8c88f0;
+  --accent-hover: #9d99f2;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.2);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.3);
+  --shadow-lg: 0 16px 48px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --font-hand: 'Xiaolai SC', 'Virgil', cursive, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-hand);
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  /* Excalidraw-like dot pattern */
+  background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.app-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Typography */
+h1, h2, h3, button, input, textarea {
+  font-family: inherit;
+}
+
+/* Floating Header */
+header {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+header::before {
+  content: "";
+  position: absolute;
+  top: -2rem;
+  left: -2rem;
+  right: -2rem;
+  bottom: -2rem;
+}
+header:hover {
+  opacity: 1 !important;
+}
+
+header h1 {
+  font-size: 1.1rem;
+  color: var(--text-main);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: var(--bg-panel);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+/* Main Workspace */
+.workspace {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0; /* remove top padding */
+  overflow: hidden;
+}
+
+.spread-wrapper {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0; /* Pages should touch in the middle like a real book */
+  max-width: 95vw;
+}
+
+.page-slot {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+}
+.left-page {
+  justify-content: flex-end;
+}
+.right-page {
+  justify-content: flex-start;
+}
+
+.nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 1rem;
+  z-index: 150;
+  opacity: 0.3;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-arrow:hover {
+  opacity: 1;
+  color: var(--text-main);
+  background: transparent;
+}
+.prev-arrow {
+  left: 10rem; /* Give space for the timeline sidebar */
+}
+.next-arrow {
+  right: 2rem;
+}
+
+/* Floating Toolbar */
+.toolbar {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  background: var(--bg-panel);
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  z-index: 100;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  opacity: 1;
+}
+
+/* Collapsed Toolbar state */
+.toolbar.is-collapsed {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  padding: 0;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 0.6;
+}
+.toolbar.is-collapsed:hover {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.05);
+}
+
+button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  color: var(--text-main);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  padding: 0 0.5rem;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Page Components */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 1rem 0.5rem; /* Narrowed side gap between pages */
+  overflow: hidden;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: calc((100vh - 4.5rem) / 1.547); /* Matches canvas width */
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+  flex-shrink: 0;
+}
+
+.page-num {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.page-note-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--border-color);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.4rem;
+  text-align: center;
+  width: 140px;
+  transition: all 0.2s ease;
+}
+.page-note-input:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+  width: 220px; /* expands smoothly when focused */
+}
+.page-note-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.plot-dots {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.plot-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  padding: 0 !important; /* override default button padding */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.35;
+}
+.plot-dot:hover {
+  transform: scale(1.25);
+  opacity: 0.85;
+}
+.plot-dot.active {
+  opacity: 1;
+  transform: scale(1.15);
+  box-shadow: 0 0 6px var(--dot-shadow);
+}
+
+.dot-green {
+  background-color: #4ade80;
+  --dot-shadow: rgba(74, 222, 128, 0.5);
+}
+.dot-yellow {
+  background-color: #facc15;
+  --dot-shadow: rgba(250, 204, 21, 0.5);
+}
+.dot-pink {
+  background-color: #f472b6;
+  --dot-shadow: rgba(244, 114, 182, 0.5);
+}
+
+.plot-dot.active.dot-green {
+  border-color: #22c55e;
+}
+.plot-dot.active.dot-yellow {
+  border-color: #eab308;
+}
+.plot-dot.active.dot-pink {
+  border-color: #ec4899;
+}
+
+.page-title {
+  display: none; /* Hide page title to maximize space */
+}
+
+.page-canvas {
+  aspect-ratio: 1 / 1.547; /* US Comic Proportion */
+  width: 100%;
+  height: auto;
+  max-height: calc(100% - 2.5rem);
+  max-width: calc((100vh - 4.5rem) / 1.547); /* Prevent it from getting taller than the screen */
+  background: var(--bg-canvas); /* use canvas instead of panel to blend in */
+  box-shadow: none; /* remove shadow for flat full screen look */
+  padding: 1rem;
+  display: grid;
+  transition: gap 0.3s ease;
+  border-radius: 0;
+  border: none;
+}
+
+/* Hand-drawn style panels */
+.panel {
+  border: 2px solid var(--text-main);
+  border-radius: 2px 255px 3px 25px / 255px 5px 225px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+.panel:hover {
+  background: rgba(0,0,0,0.02);
+}
+.panel:focus-within {
+  border-color: var(--accent);
+  background: rgba(105, 101, 219, 0.03);
+}
+
+.panel-num {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+.panel-input {
+  width: 90%;
+  height: 90%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 1.1rem;
+  resize: none;
+  outline: none;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+.panel-input::placeholder {
+  color: transparent;
+}
+.panel-input:focus::placeholder {
+  color: #ccc;
+}
+
+/* Sidebar Script Editor */
+#editor-sidebar {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 360px;
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1), opacity 0.3s ease;
+  z-index: 200;
+  overflow: hidden;
+}
+
+#editor-sidebar.hidden {
+  transform: translateX(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.editor-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05); /* darker for dark mode */
+}
+.editor-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.4rem;
+  color: var(--text-muted);
+  padding: 0.2rem;
+  line-height: 1;
+}
+.editor-close:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#script-input {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  color: var(--text-main);
+  border: none;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  resize: none;
+  outline: none;
+  padding: 1.5rem;
+}
+
+/* Nav Controls */
+.controls {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  background: var(--bg-panel);
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  z-index: 100;
+}
+.btn-nav {
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.btn-nav:hover {
+  color: var(--text-main);
+}
+
+/* Grid Layouts */
+.grid-4x3 {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+.grid-3x4 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
