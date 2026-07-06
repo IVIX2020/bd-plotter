@@ -72,7 +72,8 @@ function createEmptyPage(gridType = '3x4') {
       id: crypto.randomUUID(),
       text: '',
       cells: [i], // 占有するベースグリッドのセル番号の配列
-      isInset: false
+      isInset: false,
+      plotColor: null
     });
   }
   
@@ -86,12 +87,16 @@ function createEmptyPage(gridType = '3x4') {
   };
 }
 
-// Generate a default empty episode
-function createEmptyEpisode(title = "エピソード 1") {
+// Generate a default empty episode with specified pages count
+function createEmptyEpisode(title = "エピソード 1", pageCount = 4) {
+  const pages = [];
+  for (let i = 0; i < pageCount; i++) {
+    pages.push(createEmptyPage('3x4'));
+  }
   return {
     id: crypto.randomUUID(),
     title,
-    pages: [createEmptyPage('3x4')],
+    pages,
     currentSpreadIndex: 0,
     currentPageIndex: 0,
     firstPageIsSingle: true,
@@ -336,8 +341,8 @@ watch(() => store.isToolbarOpen, (newVal) => {
 });
 
 // Project / Episode Management Actions
-export function addEpisode(title = `第${projectState.episodes.length + 1}話`) {
-  const newEp = createEmptyEpisode(title);
+export function addEpisode(title = `第${projectState.episodes.length + 1}話`, pageCount = 4) {
+  const newEp = createEmptyEpisode(title, pageCount);
   projectState.episodes.push(newEp);
   projectState.activeEpisodeId = newEp.id;
 }
@@ -361,6 +366,54 @@ export function deleteEpisode(id) {
       projectState.activeEpisodeId = projectState.episodes[Math.max(0, index - 1)].id;
     }
   }
+}
+
+export function resetProject(pageCount = 4) {
+  projectState.projectTitle = '新規プロジェクト';
+  const newEp = createEmptyEpisode('第1話');
+  newEp.pages = [];
+  for (let i = 0; i < pageCount; i++) {
+    newEp.pages.push(createEmptyPage('3x4'));
+  }
+  newEp.currentSpreadIndex = 0;
+  newEp.currentPageIndex = 0;
+
+  projectState.episodes = [newEp];
+  projectState.activeEpisodeId = newEp.id;
+  
+  // Clear undo/redo history to prevent garbage state restoring
+  historyState.history = [];
+  historyState.currentIndex = -1;
+  saveSnapshot();
+}
+
+export function duplicateEpisode(id) {
+  const ep = projectState.episodes.find(e => e.id === id);
+  if (!ep) return;
+
+  // Deep clone pages and regenerate UUIDs to prevent keys collision
+  const clonedPages = JSON.parse(JSON.stringify(ep.pages));
+  clonedPages.forEach(p => {
+    p.id = crypto.randomUUID();
+    p.panels.forEach(panel => {
+      panel.id = crypto.randomUUID();
+    });
+  });
+
+  const newEp = {
+    id: crypto.randomUUID(),
+    title: `${ep.title} コピー`,
+    pages: clonedPages,
+    currentSpreadIndex: ep.currentSpreadIndex,
+    currentPageIndex: ep.currentPageIndex,
+    firstPageIsSingle: ep.firstPageIsSingle,
+    rowGap: ep.rowGap,
+    colGap: ep.colGap
+  };
+
+  const index = projectState.episodes.findIndex(e => e.id === id);
+  projectState.episodes.splice(index + 1, 0, newEp);
+  projectState.activeEpisodeId = newEp.id;
 }
 
 // Page actions affecting the active episode
@@ -417,7 +470,8 @@ export function insertRow(pageIndex, insertRowIndex) {
       id: crypto.randomUUID(),
       text: '',
       cells: newCells,
-      isInset: false
+      isInset: false,
+      plotColor: null
     });
   }
 }
@@ -484,7 +538,8 @@ export function addColumnToRow(pageIndex, rowIndex) {
     id: crypto.randomUUID(),
     text: '',
     cells: newCells,
-    isInset: false
+    isInset: false,
+    plotColor: null
   });
 }
 
@@ -788,7 +843,8 @@ export function mergeSelectedPanels() {
     id: crypto.randomUUID(),
     text: combinedText,
     cells: targetCells,
-    isInset: false
+    isInset: false,
+    plotColor: panelsToAbsorb[0]?.plotColor || null
   });
 
   selectionState.selectedIds.clear();
@@ -818,7 +874,8 @@ export function splitPanel(pageIndex, panelId) {
       id: crypto.randomUUID(),
       text: i === 0 ? panel.text : '',
       cells: chunk,
-      isInset: false
+      isInset: false,
+      plotColor: i === 0 ? (panel.plotColor || null) : null
     });
   }
 }

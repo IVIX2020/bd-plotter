@@ -1,7 +1,14 @@
 <template>
   <div 
     class="panel"
-    :class="{ 'is-editing': isEditing, 'is-selected': isSelected, 'is-inset': panel.isInset }"
+    :class="{ 
+      'is-editing': isEditing, 
+      'is-selected': isSelected, 
+      'is-inset': panel.isInset,
+      'plot-green': panel.plotColor === 'green',
+      'plot-yellow': panel.plotColor === 'yellow',
+      'plot-pink': panel.plotColor === 'pink'
+    }"
     @mousedown.left="startSelection"
     @mouseenter="onEnter"
     @dblclick.stop="startEditing"
@@ -9,6 +16,23 @@
   >
     <span class="panel-num" v-if="!isEditing">{{ index + 1 }}</span>
     
+    <!-- Panel Plot Color Dots (Top Right, shifts dynamically if split button is present) -->
+    <div 
+      class="panel-plot-dots" 
+      :class="{ 'has-active-color': panel.plotColor }" 
+      v-if="!isEditing"
+      :style="{ right: canSplit ? '36px' : '8px' }"
+    >
+      <button 
+        v-for="color in ['green', 'yellow', 'pink']" 
+        :key="color"
+        :class="['plot-dot', 'dot-' + color, { active: panel.plotColor === color }]"
+        @mousedown.stop
+        @click.stop="togglePlotColor(color)"
+        :title="getPlotTitle(color)"
+      ></button>
+    </div>
+
     <button v-if="canSplit" class="split-btn" @mousedown.stop.prevent="onSplit" title="分割する">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -88,7 +112,7 @@ const gridStyle = computed(() => {
 
 const startSelection = (e) => {
   if (isEditing.value) return;
-  e.preventDefault(); // Prevent text selection/drag native behavior
+  e.preventDefault();
   selectionState.isSelecting = true;
   selectionState.pageIndex = props.pageIndex;
   selectionState.selectedIds.clear();
@@ -119,6 +143,22 @@ const stopEditing = () => {
   isEditing.value = false;
   props.panel.text = localText.value;
 }
+
+// Toggle plot color on the panel object
+const togglePlotColor = (color) => {
+  if (props.panel.plotColor === color) {
+    props.panel.plotColor = null;
+  } else {
+    props.panel.plotColor = color;
+  }
+}
+
+const getPlotTitle = (color) => {
+  if (color === 'green') return '起 (Green)';
+  if (color === 'yellow') return '承・転 (Yellow)';
+  if (color === 'pink') return '結 (Pink)';
+  return '';
+}
 </script>
 
 <style scoped>
@@ -126,24 +166,50 @@ const stopEditing = () => {
   border: 2px solid var(--text-main);
   border-radius: 2px 255px 3px 25px / 255px 5px 225px 3px;
   display: flex;
-  align-items: flex-start; /* top align content */
-  justify-content: flex-start; /* left align content */
+  align-items: flex-start;
+  justify-content: flex-start;
   position: relative;
   background: transparent;
   transition: all 0.2s ease;
   cursor: pointer;
   overflow: hidden;
   min-height: 0;
-  min-width: 0; /* Enable panel shrinking inside tight grid layouts */
+  min-width: 0;
   user-select: none;
   -webkit-user-select: none;
-  padding: 26px 12px 12px 12px; /* Pad top to clear panel number label and split button */
-  box-sizing: border-box; /* Maintain clean bounds calculations */
-  margin: calc(var(--row-gap, 12px) / 2) calc(var(--col-gap, 6px) / 2); /* Create layout gaps using margins to avoid CSS Grid track expansion */
+  padding: 26px 12px 12px 12px;
+  box-sizing: border-box;
+  margin: calc(var(--row-gap, 12px) / 2) calc(var(--col-gap, 6px) / 2);
 }
 .panel:hover {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
+
+/* Plot Color Border and Background Tint overrides */
+.panel.plot-green {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.04);
+}
+.panel.plot-green:hover {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.panel.plot-yellow {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.04);
+}
+.panel.plot-yellow:hover {
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.panel.plot-pink {
+  border-color: #f472b6;
+  background: rgba(244, 114, 182, 0.04);
+}
+.panel.plot-pink:hover {
+  background: rgba(244, 114, 182, 0.08);
+}
+
 .panel.is-editing {
   border-color: var(--accent);
   background: rgba(140, 136, 240, 0.05);
@@ -155,18 +221,75 @@ const stopEditing = () => {
   box-shadow: 0 0 0 2px var(--accent);
 }
 .panel.is-inset {
-  background: var(--bg-canvas); /* opaque background to hide panel underneath */
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  background: var(--bg-canvas);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
   border-width: 3px;
 }
 
 .panel-num {
   position: absolute;
-  top: 6px;
-  left: 8px;
-  font-size: 0.8rem;
+  top: 8px;
+  left: 10px;
+  font-size: 0.75rem;
+  font-weight: bold;
   color: var(--text-muted);
-  user-select: none;
+  pointer-events: none;
+}
+
+/* Panel plot dots styling */
+.panel-plot-dots {
+  position: absolute;
+  top: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 15;
+}
+.panel:hover .panel-plot-dots, .panel-plot-dots.has-active-color {
+  opacity: 1;
+}
+
+.plot-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.35;
+  background: transparent;
+}
+.plot-dot:hover {
+  transform: scale(1.25);
+  opacity: 0.85;
+}
+.plot-dot.active {
+  opacity: 1;
+  transform: scale(1.15);
+  box-shadow: 0 0 6px var(--dot-shadow);
+}
+.dot-green {
+  background-color: #4ade80;
+  --dot-shadow: rgba(74, 222, 128, 0.5);
+}
+.dot-yellow {
+  background-color: #facc15;
+  --dot-shadow: rgba(250, 204, 21, 0.5);
+}
+.dot-pink {
+  background-color: #f472b6;
+  --dot-shadow: rgba(244, 114, 182, 0.5);
+}
+.plot-dot.active.dot-green {
+  border-color: #22c55e;
+}
+.plot-dot.active.dot-yellow {
+  border-color: #eab308;
+}
+.plot-dot.active.dot-pink {
+  border-color: #ec4899;
 }
 
 .split-btn {
@@ -186,7 +309,7 @@ const stopEditing = () => {
 }
 .split-btn:hover {
   color: var(--text-main);
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .panel-input {
@@ -194,13 +317,13 @@ const stopEditing = () => {
   height: 100%;
   border: none;
   background: transparent;
-  text-align: left; /* left align edit text */
+  color: var(--text-main);
+  font-family: inherit;
   font-size: 0.85rem;
   resize: none;
   outline: none;
-  color: var(--text-main);
+  padding: 0;
   line-height: 1.4;
-  font-family: inherit;
 }
 
 .panel-preview {
@@ -208,13 +331,13 @@ const stopEditing = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start; /* top align blocks */
-  align-items: flex-start; /* left align blocks */
-  text-align: left; /* left align text */
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
   gap: 8px;
   font-size: 0.85rem;
   overflow-y: auto;
-  user-select: none; /* Prevent text selection during drag */
+  user-select: none;
 }
 
 .block-dialogue-protag {
@@ -226,7 +349,7 @@ const stopEditing = () => {
   color: var(--text-main);
   display: flex;
   flex-direction: column;
-  align-items: flex-start; /* left align character metadata */
+  align-items: flex-start;
 }
 .char-name {
   font-size: 0.75rem;

@@ -8,6 +8,44 @@
         :class="{ active: store.currentSpreadIndex === sIndex }"
         @click="store.currentSpreadIndex = sIndex"
       >
+        <!-- Stacked L/R Plot Notes above thumbnails -->
+        <div class="spread-notes-wrapper" @click.stop>
+          <!-- Left Page Note -->
+          <div v-if="!(store.firstPageIsSingle && sIndex === 0)" class="note-row">
+            <span class="note-badge L">L</span>
+            <input 
+              type="text" 
+              class="plot-input" 
+              v-model="store.pages[spread[0].index].plotInfo" 
+              placeholder="左ページのプロット..." 
+              title="左ページのプロット・メモ"
+            />
+          </div>
+          
+          <!-- Right Page Note -->
+          <div v-if="store.firstPageIsSingle && sIndex === 0" class="note-row">
+            <span class="note-badge R">R</span>
+            <input 
+              type="text" 
+              class="plot-input" 
+              v-model="store.pages[spread[0].index].plotInfo" 
+              placeholder="右ページのプロット..." 
+              title="右ページのプロット・メモ"
+            />
+          </div>
+          <div v-else-if="spread[1]" class="note-row">
+            <span class="note-badge R">R</span>
+            <input 
+              type="text" 
+              class="plot-input" 
+              v-model="store.pages[spread[1].index].plotInfo" 
+              placeholder="右ページのプロット..." 
+              title="右ページのプロット・メモ"
+            />
+          </div>
+        </div>
+
+        <!-- Thumbnails Spread -->
         <div class="spread-thumb">
           <div v-if="store.firstPageIsSingle && sIndex === 0" class="page-wrapper empty-wrapper"></div>
           
@@ -29,18 +67,15 @@
                 v-for="panel in store.pages[pRef.index].panels" 
                 :key="panel.id"
                 class="mini-panel"
+                :class="panel.plotColor ? 'plot-' + panel.plotColor : ''"
                 :style="getPanelStyle(pRef.index, panel)"
               ></div>
             </div>
-            <div v-if="store.pages[pRef.index].plotColor" :class="['mini-plot-dot', 'dot-' + store.pages[pRef.index].plotColor]"></div>
-            <span class="thumb-num">{{ pRef.index + 1 }}</span>
-            <input 
-              type="text" 
-              class="plot-input" 
-              v-model="store.pages[pRef.index].plotInfo" 
-              placeholder="プロット・メモ..." 
-              @click.stop
-            />
+            
+            <div class="page-meta-row">
+              <div v-if="store.pages[pRef.index].plotColor" :class="['mini-plot-dot', 'dot-' + store.pages[pRef.index].plotColor]"></div>
+              <span class="thumb-num">P.{{ pRef.index + 1 }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -59,37 +94,46 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { store, addPage, deletePage, movePage } from '../store'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { store, deletePage, movePage, addPage } from '../store'
 
 const hoveredPage = ref(null)
 
 const spreads = computed(() => {
-  const numPages = store.pages.length;
-  const spreadList = [];
-  if (numPages === 0) return spreadList;
-  
+  const numPages = store.pages.length
+  const list = []
+  if (numPages === 0) return list
+
   if (store.firstPageIsSingle) {
-    spreadList.push([ { index: 0 } ]); 
+    // Page 1 is alone on the right (index 0)
+    list.push([{ index: 0 }])
+    
+    // Page 2 & 3, 4 & 5... form spreads
     for (let i = 1; i < numPages; i += 2) {
-      const spread = [{ index: i }];
-      if (i + 1 < numPages) spread.push({ index: i + 1 });
-      spreadList.push(spread);
+      const pair = [{ index: i }]
+      if (i + 1 < numPages) {
+        pair.push({ index: i + 1 })
+      }
+      list.push(pair)
     }
   } else {
+    // Page 1 & 2 form spreads directly
     for (let i = 0; i < numPages; i += 2) {
-      const spread = [{ index: i }];
-      if (i + 1 < numPages) spread.push({ index: i + 1 });
-      spreadList.push(spread);
+      const pair = [{ index: i }]
+      if (i + 1 < numPages) {
+        pair.push({ index: i + 1 })
+      }
+      list.push(pair)
     }
   }
-  return spreadList;
+  return list
 })
 
 const getGridStyle = (pageIndex) => {
-  const page = store.pages[pageIndex];
-  if (!page) return {};
-  const [cols, rows] = page.gridType.split('x').map(Number);
+  const page = store.pages[pageIndex]
+  if (!page) return {}
+  
+  const [cols, rows] = page.gridType.split('x').map(Number)
   return {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -99,19 +143,22 @@ const getGridStyle = (pageIndex) => {
 }
 
 const getPanelStyle = (pageIndex, panel) => {
-  const page = store.pages[pageIndex];
-  if (!page || !panel.cells || panel.cells.length === 0) return {};
-  const cols = parseInt(page.gridType.split('x')[0], 10);
+  const page = store.pages[pageIndex]
+  if (!page || !panel.cells || panel.cells.length === 0) return {}
   
-  const coords = panel.cells.map(c => ({
-    r: Math.ceil(c / cols),
-    c: ((c - 1) % cols) + 1
-  }));
+  const cols = parseInt(page.gridType.split('x')[0], 10)
   
-  const minR = Math.min(...coords.map(c => c.r));
-  const maxR = Math.max(...coords.map(c => c.r));
-  const minC = Math.min(...coords.map(c => c.c));
-  const maxC = Math.max(...coords.map(c => c.c));
+  const coords = panel.cells.map(c => {
+    return {
+      r: Math.ceil(c / cols),
+      c: ((c - 1) % cols) + 1
+    }
+  })
+  
+  const minR = Math.min(...coords.map(c => c.r))
+  const maxR = Math.max(...coords.map(c => c.r))
+  const minC = Math.min(...coords.map(c => c.c))
+  const maxC = Math.max(...coords.map(c => c.c))
   
   return {
     gridColumnStart: minC,
@@ -127,14 +174,20 @@ const getPanelStyle = (pageIndex, panel) => {
 }
 </script>
 
+<script>
+export default {
+  name: 'Timeline'
+}
+</script>
+
 <style scoped>
 .timeline-container {
   position: absolute;
   top: calc(60px + 1.5rem);
   bottom: 1.5rem;
   left: 1.5rem;
-  width: 140px;
-  z-index: 250; /* Higher z-index to overlay pages */
+  width: 155px; /* Slightly wider to give text inputs more width */
+  z-index: 250;
   background: var(--bg-panel);
   padding: 1rem 0.5rem;
   border-radius: var(--radius);
@@ -143,7 +196,6 @@ const getPanelStyle = (pageIndex, panel) => {
   overflow-y: auto;
   overflow-x: hidden;
   
-  /* Slide out transition */
   transform: translateX(-120%);
   opacity: 0;
   pointer-events: none;
@@ -167,7 +219,7 @@ const getPanelStyle = (pageIndex, panel) => {
 .timeline-track {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   align-items: center;
 }
 
@@ -180,39 +232,102 @@ const getPanelStyle = (pageIndex, panel) => {
   transform: scale(1.02);
 }
 
-.spread-thumb {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-  background: transparent;
-  padding: 4px;
-  border-radius: 6px;
-  border: 2px solid transparent;
-}
-.timeline-item.active .spread-thumb {
-  border-color: var(--accent);
-  background: rgba(140, 136, 240, 0.05);
-}
-
-.page-wrapper {
+.spread-notes-wrapper {
   display: flex;
   flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.note-row {
+  display: flex;
   align-items: center;
   gap: 4px;
-  width: 48px;
+  width: 100%;
+}
+
+.note-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.note-badge.L {
+  background: rgba(140, 136, 240, 0.15);
+  color: var(--accent);
+}
+
+.note-badge.R {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f472b6;
+}
+
+.plot-input {
+  flex-grow: 1;
+  width: 0;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-main);
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+.plot-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+.plot-input:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.plot-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-canvas);
+}
+
+.spread-thumb {
+  display: flex;
+  gap: 0.25rem;
+  width: 100%;
   position: relative;
 }
 
+.page-wrapper {
+  flex: 1;
+  width: 50%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
 .mini-plot-dot {
-  position: absolute;
-  top: 0px;
-  right: 0px;
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  border: 1.5px solid var(--bg-panel);
-  z-index: 10;
-  pointer-events: none;
+  flex-shrink: 0;
 }
 .mini-plot-dot.dot-green {
   background-color: #4ade80;
@@ -281,30 +396,27 @@ const getPanelStyle = (pageIndex, panel) => {
   border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 1px;
 }
+.mini-panel.plot-green {
+  background: #4ade80 !important;
+  border-color: #22c55e !important;
+}
+.mini-panel.plot-yellow {
+  background: #facc15 !important;
+  border-color: #eab308 !important;
+}
+.mini-panel.plot-pink {
+  background: #f472b6 !important;
+  border-color: #ec4899 !important;
+}
 
 .thumb-num {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: bold;
   color: var(--text-muted);
+  user-select: none;
 }
 .timeline-item.active .thumb-num {
   color: var(--accent);
-}
-
-.plot-input {
-  width: 100%;
-  font-size: 0.6rem;
-  padding: 2px;
-  text-align: center;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-main);
-  border-radius: 2px;
-}
-.plot-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg-canvas);
 }
 
 .add-thumb {
