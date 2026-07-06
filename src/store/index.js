@@ -3,6 +3,64 @@ import { generateFountainDocument } from '../utils/fountain';
 
 const STORAGE_KEY = 'bd-paneling-state';
 
+// Greatest Common Divisor
+function gcd(a, b) {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+// Least Common Multiple
+function lcm(a, b) {
+  return (a * b) / gcd(a, b);
+}
+
+// LCM of an array of numbers
+function lcmArray(arr) {
+  return arr.reduce((acc, val) => lcm(acc, val), 1);
+}
+
+// Rebuild cells layout map in the new global grid dimensions based on rowCols
+function rebuildGridWithRowCols(page, oldCols, oldRowCols, rowShiftIndex = 999) {
+  const newCols = lcmArray(page.rowCols);
+  
+  page.panels.forEach(panel => {
+    // 1. Identify all unique row/col coordinates this panel occupies in the old grid layout
+    const uniqueKeys = new Set();
+    panel.cells.forEach(c => {
+      const r = Math.ceil(c / oldCols);
+      const col = ((c - 1) % oldCols) + 1;
+      const C_r = oldRowCols[r - 1];
+      const oldW = oldCols / C_r;
+      const localCol = Math.floor((col - 1) / oldW) + 1;
+      uniqueKeys.add(`${r}_${localCol}`);
+    });
+    
+    // 2. Map coordinates to the new rescaled LCM grid
+    const newCells = [];
+    uniqueKeys.forEach(key => {
+      const [rStr, cStr] = key.split('_');
+      const r = parseInt(rStr, 10);
+      const localCol = parseInt(cStr, 10);
+      
+      // Shift row indices for rows starting at or below rowShiftIndex
+      const new_r = r >= rowShiftIndex ? r + 1 : r;
+      
+      const C_new = page.rowCols[new_r - 1];
+      const newW = newCols / C_new;
+      
+      for (let k = 1; k <= newW; k++) {
+        const cellId = (new_r - 1) * newCols + (localCol - 1) * newW + k;
+        newCells.push(cellId);
+      }
+    });
+    
+    // Sort cell numbers ascending
+    newCells.sort((a, b) => a - b);
+    panel.cells = newCells;
+  });
+  
+  page.gridType = `${newCols}x${page.rowCols.length}`;
+}
+
 // Generate a default empty page
 function createEmptyPage(gridType = '3x4') {
   const [cols, rows] = gridType.split('x').map(Number);
@@ -21,9 +79,10 @@ function createEmptyPage(gridType = '3x4') {
   return {
     id: crypto.randomUUID(),
     gridType,
-    plotInfo: '', // Added plot info field
-    plotColor: null, // Added plot color field
-    panels
+    plotInfo: '',
+    plotColor: null,
+    panels,
+    rowCols: Array(rows).fill(cols) // Track columns per row
   };
 }
 
@@ -50,6 +109,13 @@ if (savedState) {
         currentSpreadIndex: parsed.currentSpreadIndex || 0,
         firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true
       };
+      // Populate rowCols for loaded pages if missing
+      initialState.pages.forEach(p => {
+        if (!p.rowCols) {
+          const [cols, rows] = p.gridType.split('x').map(Number);
+          p.rowCols = Array(rows).fill(cols);
+        }
+      });
     } else {
       console.warn("Old state format detected. Falling back to default state.");
     }
@@ -64,7 +130,8 @@ const initialToolbarOpen = savedToolbarOpen !== null ? JSON.parse(savedToolbarOp
 export const store = reactive({
   ...initialState,
   fountainOutput: '',
-  isToolbarOpen: initialToolbarOpen
+  isToolbarOpen: initialToolbarOpen,
+  isTimelineOpen: false
 });
 
 // History state for Undo/Redo
@@ -189,6 +256,116 @@ export function movePage(index, direction) {
   }
 }
 
+// Insert a new row (tier) dynamically
+export function insertRow(pageIndex, insertRowIndex) {
+  const page = store.pages[pageIndex];
+  if (!page) return;
+
+  if (!page.rowCols) {
+    const [cols, rows] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(rows).fill(cols);
+  }
+
+  const [oldCols] = page.gridType.split('x').map(Number);
+  const oldRowCols = [...page.rowCols];
+
+  // Insert a column count for the new row (copy the closest row's columns, or 3)
+  const defaultCols = insertRowIndex > 1 ? page.rowCols[insertRowIndex - 2] : 3;
+  page.rowCols.splice(insertRowIndex - 1, 0, defaultCols);
+
+  rebuildGridWithRowCols(page, oldCols, oldRowCols, insertRowIndex);
+
+  // Add new empty panels for the inserted row (which has defaultCols columns)
+  const newCols = lcmArray(page.rowCols);
+  const newW = newCols / defaultCols;
+  for (let col = 1; col <= defaultCols; col++) {
+    const newCells = [];
+    for (let k = 1; k <= newW; k++) {
+      const cellId = (insertRowIndex - 1) * newCols + (col - 1) * newW + k;
+      newCells.push(cellId);
+    }
+    page.panels.push({
+      id: crypto.randomUUID(),
+      text: '',
+      cells: newCells,
+      isInset: false
+    });
+  }
+}
+
+// Check if columns can be increased on a specific row
+export function canAddColumnToRow(pageIndex, rowIndex) {
+  const page = store.pages[pageIndex];
+  if (!page) return false;
+
+  if (!page.rowCols) {
+    const [cols, rows] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(rows).fill(cols);
+  }
+
+  const [cols] = page.gridType.split('x').map(Number);
+  const C = page.rowCols[rowIndex - 1];
+
+  // Find all panels that touch this row
+  const rowPanels = page.panels.filter(p => {
+    const coords = p.cells.map(c => Math.ceil(c / cols));
+    return coords.includes(rowIndex);
+  });
+
+  // Rule 1: No panels in this row must span multiple rows
+  const spansMultipleRows = rowPanels.some(p => {
+    const rows = p.cells.map(c => Math.ceil(c / cols));
+    return Math.min(...rows) !== Math.max(...rows);
+  });
+  if (spansMultipleRows) return false;
+
+  // Rule 2: All panels in this row must have exactly the default width (cols / C)
+  const expectedWidth = cols / C;
+  const allDefaultWidth = rowPanels.every(p => p.cells.length === expectedWidth);
+
+  return allDefaultWidth;
+}
+
+// Add a column to a specific row (tier) dynamically
+export function addColumnToRow(pageIndex, rowIndex) {
+  const page = store.pages[pageIndex];
+  if (!page) return;
+
+  if (!page.rowCols) {
+    const [cols, rows] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(rows).fill(cols);
+  }
+
+  if (!canAddColumnToRow(pageIndex, rowIndex)) {
+    return;
+  }
+
+  const [oldCols] = page.gridType.split('x').map(Number);
+  const oldRowCols = [...page.rowCols];
+
+  // Increment the column count of rowIndex
+  page.rowCols[rowIndex - 1] += 1;
+
+  rebuildGridWithRowCols(page, oldCols, oldRowCols);
+
+  // Add the new empty panel for the new column (located at index C_new)
+  const newCols = lcmArray(page.rowCols);
+  const C_new = page.rowCols[rowIndex - 1];
+  const newW = newCols / C_new;
+  const newCells = [];
+  for (let k = 1; k <= newW; k++) {
+    const cellId = (rowIndex - 1) * newCols + (C_new - 1) * newW + k;
+    newCells.push(cellId);
+  }
+
+  page.panels.push({
+    id: crypto.randomUUID(),
+    text: '',
+    cells: newCells,
+    isInset: false
+  });
+}
+
 export function importJson(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -200,6 +377,13 @@ export function importJson(file) {
         store.firstPageIsSingle = parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true;
         store.rowGap = parsed.rowGap || 12;
         store.colGap = parsed.colGap || 6;
+        // Populate rowCols for imported pages if missing
+        store.pages.forEach(p => {
+          if (!p.rowCols) {
+            const [cols, rows] = p.gridType.split('x').map(Number);
+            p.rowCols = Array(rows).fill(cols);
+          }
+        });
       } else {
         alert("Invalid file format.");
       }
@@ -248,6 +432,27 @@ export function mergeSelectedPanels() {
   
   const cols = parseInt(page.gridType.split('x')[0], 10);
   
+  // Rule check: All rows involved in cross-row merging must have identical column counts
+  if (!page.rowCols) {
+    const [c, r] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(r).fill(c);
+  }
+  
+  const occupiedRows = new Set();
+  selectedPanels.forEach(p => {
+    p.cells.forEach(c => {
+      occupiedRows.add(Math.ceil(c / cols));
+    });
+  });
+
+  const rowColsList = Array.from(occupiedRows).map(r => page.rowCols[r - 1]);
+  const allSameColCount = rowColsList.every(val => val === rowColsList[0]);
+
+  if (!allSameColCount) {
+    alert("列数が異なる段をまたぐ結合はできません。");
+    return;
+  }
+
   // Calculate bounding box of all selected cells
   const getAllCoords = (panels) => panels.flatMap(p => p.cells.map(c => ({
     r: Math.ceil(c / cols),
@@ -306,17 +511,25 @@ export function splitPanel(pageIndex, panelId) {
   const panel = page.panels[panelIndex];
   if (panel.cells.length <= 1) return;
 
+  const cols = parseInt(page.gridType.split('x')[0], 10);
+  if (!page.rowCols) {
+    const [c, r] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(r).fill(c);
+  }
+  const row = Math.ceil(panel.cells[0] / cols);
+  const C_row = page.rowCols[row - 1];
+  const W = cols / C_row;
+
   page.panels.splice(panelIndex, 1);
 
-  // Break back into individual 1x1 cells
-  panel.cells.forEach((cell, idx) => {
+  // Break back into original column width blocks
+  for (let i = 0; i < panel.cells.length; i += W) {
+    const chunk = panel.cells.slice(i, i + W);
     page.panels.push({
       id: crypto.randomUUID(),
-      text: idx === 0 ? panel.text : '',
-      cells: [cell],
+      text: i === 0 ? panel.text : '',
+      cells: chunk,
       isInset: false
     });
-  });
+  }
 }
-
-// We will add more actions for merging panels later.

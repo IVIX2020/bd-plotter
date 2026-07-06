@@ -50,38 +50,7 @@ h1, h2, h3, button, input, textarea {
   font-family: inherit;
 }
 
-/* Floating Header */
-header {
-  position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 100;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-header::before {
-  content: "";
-  position: absolute;
-  top: -2rem;
-  left: -2rem;
-  right: -2rem;
-  bottom: -2rem;
-}
-header:hover {
-  opacity: 1 !important;
-}
-
-header h1 {
-  font-size: 1.1rem;
-  color: var(--text-main);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  background: var(--bg-panel);
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-}
+/* Floating Header removed - now integrated in Toolbar.vue */
 
 /* Main Workspace */
 .workspace {
@@ -91,7 +60,7 @@ header h1 {
   justify-content: center;
   position: relative;
   width: 100%;
-  height: 100%;
+  min-height: 0; /* Let flexbox control the height */
   padding: 0; /* remove top padding */
   overflow: hidden;
 }
@@ -150,39 +119,7 @@ header h1 {
   right: 2rem;
 }
 
-/* Floating Toolbar */
-.toolbar {
-  position: absolute;
-  top: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 0.5rem;
-  background: var(--bg-panel);
-  padding: 0.5rem;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  z-index: 100;
-  align-items: center;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  opacity: 1;
-}
-
-/* Collapsed Toolbar state */
-.toolbar.is-collapsed {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  padding: 0;
-  justify-content: center;
-  overflow: hidden;
-  opacity: 0.6;
-}
-.toolbar.is-collapsed:hover {
-  opacity: 1;
-  transform: translateX(-50%) scale(1.05);
-}
+/* Floating Toolbar replaced by top screen-wide menu bar */
 
 button {
   background: transparent;
@@ -324,7 +261,7 @@ input[type="range"] {
   width: 100%;
   height: auto;
   max-height: calc(100% - 2.5rem);
-  max-width: calc((100vh - 4.5rem) / 1.547); /* Prevent it from getting taller than the screen */
+  max-width: calc((100vh - 60px - 4.5rem) / 1.547); /* Prevent it from getting taller than the screen, accounting for top menu bar */
   background: var(--bg-canvas); /* use canvas instead of panel to blend in */
   box-shadow: none; /* remove shadow for flat full screen look */
   padding: 1rem;
@@ -383,7 +320,7 @@ input[type="range"] {
 /* Sidebar Script Editor */
 #editor-sidebar {
   position: absolute;
-  top: 1.5rem;
+  top: calc(60px + 1.5rem);
   right: 1.5rem;
   bottom: 1.5rem;
   width: 360px;

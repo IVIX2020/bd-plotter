@@ -140,7 +140,7 @@ const stopEditing = () => {
   transition: all 0.2s ease;
   cursor: pointer;
   overflow: hidden;
-  min-height: 80px;
+  min-height: 0;
   user-select: none;
   -webkit-user-select: none;
 }

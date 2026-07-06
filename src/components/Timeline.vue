@@ -1,5 +1,5 @@
 <template>
-  <div class="timeline-container">
+  <div class="timeline-container" :class="{ 'is-open': store.isTimelineOpen }">
     <div class="timeline-track">
       <div 
         v-for="(spread, sIndex) in spreads" 
@@ -130,33 +130,30 @@ const getPanelStyle = (pageIndex, panel) => {
 <style scoped>
 .timeline-container {
   position: absolute;
-  top: 1.5rem;
+  top: calc(60px + 1.5rem);
   bottom: 1.5rem;
   left: 1.5rem;
   width: 140px;
-  z-index: 50;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  z-index: 250; /* Higher z-index to overlay pages */
   background: var(--bg-panel);
   padding: 1rem 0.5rem;
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
   overflow-y: auto;
   overflow-x: hidden;
+  
+  /* Slide out transition */
+  transform: translateX(-120%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
 }
-.timeline-container::before {
-  content: "";
-  position: absolute;
-  top: -2rem;
-  left: -2rem;
-  right: -2rem;
-  bottom: -2rem;
-  z-index: -1;
-}
-.timeline-container:hover {
-  opacity: 1 !important;
-  box-shadow: var(--shadow-md);
+
+.timeline-container.is-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .timeline-container::-webkit-scrollbar {
