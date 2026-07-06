@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue';
+import { reactive, watch, computed } from 'vue';
 import { generateFountainDocument } from '../utils/fountain';
 
 const STORAGE_KEY = 'bd-paneling-state';
@@ -86,38 +86,77 @@ function createEmptyPage(gridType = '3x4') {
   };
 }
 
-// Initial state
-const defaultState = {
-  pages: [createEmptyPage('3x4')],
-  currentSpreadIndex: 0,
-  firstPageIsSingle: true,
-  rowGap: 12,
-  colGap: 6,
+// Generate a default empty episode
+function createEmptyEpisode(title = "エピソード 1") {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    pages: [createEmptyPage('3x4')],
+    currentSpreadIndex: 0,
+    currentPageIndex: 0,
+    firstPageIsSingle: true,
+    rowGap: 12,
+    colGap: 6
+  };
+}
+
+// Default project state
+const defaultProjectState = {
+  projectTitle: '新規プロジェクト',
+  episodes: [createEmptyEpisode('第1話')],
+  activeEpisodeId: ''
 };
+defaultProjectState.activeEpisodeId = defaultProjectState.episodes[0].id;
 
 // Load from local storage or use default
 const savedState = localStorage.getItem(STORAGE_KEY);
-let initialState = defaultState;
+let initialProjectState = defaultProjectState;
 
 if (savedState) {
   try {
     const parsed = JSON.parse(savedState);
-    if (parsed.pages && parsed.pages[0] && parsed.pages[0].panels && parsed.pages[0].panels[0].cells !== undefined) {
-      initialState = {
-        ...defaultState,
-        ...parsed,
-        currentSpreadIndex: parsed.currentSpreadIndex || 0,
-        firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true
+    if (parsed.episodes && parsed.episodes.length > 0) {
+      // Modern format (multiple episodes)
+      initialProjectState = {
+        projectTitle: parsed.projectTitle || 'マイ・プロジェクト',
+        episodes: parsed.episodes,
+        activeEpisodeId: parsed.activeEpisodeId || parsed.episodes[0].id
       };
+      
       // Populate rowCols for loaded pages if missing
-      initialState.pages.forEach(p => {
+      initialProjectState.episodes.forEach(ep => {
+        ep.pages.forEach(p => {
+          if (!p.rowCols) {
+            const [cols, rows] = p.gridType.split('x').map(Number);
+            p.rowCols = Array(rows).fill(cols);
+          }
+        });
+      });
+    } else if (parsed.pages && parsed.pages.length > 0) {
+      // Old format migration (single episode)
+      const migratedEpisode = {
+        id: crypto.randomUUID(),
+        title: "エピソード 1",
+        pages: parsed.pages,
+        currentSpreadIndex: parsed.currentSpreadIndex || 0,
+        currentPageIndex: parsed.currentPageIndex || 0,
+        firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true,
+        rowGap: parsed.rowGap || 12,
+        colGap: parsed.colGap || 6
+      };
+      
+      migratedEpisode.pages.forEach(p => {
         if (!p.rowCols) {
           const [cols, rows] = p.gridType.split('x').map(Number);
           p.rowCols = Array(rows).fill(cols);
         }
       });
-    } else {
-      console.warn("Old state format detected. Falling back to default state.");
+
+      initialProjectState = {
+        projectTitle: 'マイ・プロジェクト',
+        episodes: [migratedEpisode],
+        activeEpisodeId: migratedEpisode.id
+      };
     }
   } catch (e) {
     console.error("Failed to parse state", e);
@@ -127,12 +166,61 @@ if (savedState) {
 const savedToolbarOpen = localStorage.getItem('bd-paneling-toolbar-open');
 const initialToolbarOpen = savedToolbarOpen !== null ? JSON.parse(savedToolbarOpen) : true;
 
+// Define the reactive project state container
+export const projectState = reactive({
+  projectTitle: initialProjectState.projectTitle,
+  episodes: initialProjectState.episodes,
+  activeEpisodeId: initialProjectState.activeEpisodeId
+});
+
+// Helper getter computed property for active episode
+export const activeEpisode = computed(() => {
+  return projectState.episodes.find(e => e.id === projectState.activeEpisodeId) || projectState.episodes[0];
+});
+
+// Main store object with proxy getters/setters to map active episode fields
 export const store = reactive({
-  ...initialState,
+  // Project-level fields
+  projectTitle: computed({
+    get: () => projectState.projectTitle,
+    set: (val) => { projectState.projectTitle = val; }
+  }),
+  episodes: computed(() => projectState.episodes),
+  activeEpisodeId: computed({
+    get: () => projectState.activeEpisodeId,
+    set: (val) => { projectState.activeEpisodeId = val; }
+  }),
+
+  // Episode-level proxy properties (auto-unwrapped when accessed)
+  pages: computed({
+    get: () => activeEpisode.value?.pages || [],
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.pages = val; }
+  }),
+  currentSpreadIndex: computed({
+    get: () => activeEpisode.value?.currentSpreadIndex ?? 0,
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.currentSpreadIndex = val; }
+  }),
+  currentPageIndex: computed({
+    get: () => activeEpisode.value?.currentPageIndex ?? 0,
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.currentPageIndex = val; }
+  }),
+  firstPageIsSingle: computed({
+    get: () => activeEpisode.value?.firstPageIsSingle ?? true,
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.firstPageIsSingle = val; }
+  }),
+  rowGap: computed({
+    get: () => activeEpisode.value?.rowGap ?? 12,
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.rowGap = val; }
+  }),
+  colGap: computed({
+    get: () => activeEpisode.value?.colGap ?? 6,
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.colGap = val; }
+  }),
+
+  // Global UI properties
   fountainOutput: '',
   isToolbarOpen: initialToolbarOpen,
   isTimelineOpen: false,
-  currentPageIndex: 0 // Track single page index for mobile view
 });
 
 // Bidirectional synchronization between currentSpreadIndex and currentPageIndex
@@ -159,7 +247,7 @@ watch(() => store.currentPageIndex, (newPageIdx) => {
   }
 });
 
-// History state for Undo/Redo
+// History state for Undo/Redo (Project-level snapshoting)
 export const historyState = reactive({
   history: [],
   currentIndex: -1
@@ -172,10 +260,9 @@ let debounceTimeout = null;
 function saveSnapshot() {
   if (isRestoring) return;
   const snapshot = JSON.stringify({
-    pages: store.pages,
-    rowGap: store.rowGap,
-    colGap: store.colGap,
-    firstPageIsSingle: store.firstPageIsSingle,
+    projectTitle: projectState.projectTitle,
+    episodes: projectState.episodes,
+    activeEpisodeId: projectState.activeEpisodeId
   });
 
   // Prevent consecutive identical snapshots
@@ -183,7 +270,7 @@ function saveSnapshot() {
     return;
   }
 
-  // If we are not at the end of the history (i.e., we undid and are now saving a new action)
+  // If we are not at the end of the history
   if (historyState.currentIndex < historyState.history.length - 1) {
     historyState.history.splice(historyState.currentIndex + 1);
   }
@@ -219,36 +306,28 @@ export function redo() {
 
 function restoreSnapshot(snapshotStr) {
   const parsed = JSON.parse(snapshotStr);
-  store.pages = parsed.pages;
-  store.rowGap = parsed.rowGap;
-  store.colGap = parsed.colGap;
-  store.firstPageIsSingle = parsed.firstPageIsSingle;
+  projectState.projectTitle = parsed.projectTitle;
+  projectState.episodes = parsed.episodes;
+  projectState.activeEpisodeId = parsed.activeEpisodeId;
 }
 
 // Watch for deep changes to automatically save history (debounced)
-watch(() => [store.pages, store.rowGap, store.colGap], () => {
+watch(() => [projectState.projectTitle, projectState.episodes, projectState.activeEpisodeId], () => {
   if (isRestoring) return;
   clearTimeout(debounceTimeout);
   debounceTimeout = setTimeout(() => {
     saveSnapshot();
-  }, 400); // 400ms debounce
+  }, 400);
 }, { deep: true, flush: 'sync' });
 
-// Update generated markdown whenever pages change
+// Update active episode generated markdown whenever active pages change
 watch(() => store.pages, () => {
   store.fountainOutput = generateFountainDocument(store.pages);
 }, { deep: true, immediate: true });
 
-// Auto-save
-watch(() => store, (state) => {
-  const stateToSave = {
-    pages: state.pages,
-    currentSpreadIndex: state.currentSpreadIndex,
-    firstPageIsSingle: state.firstPageIsSingle,
-    rowGap: state.rowGap,
-    colGap: state.colGap,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+// Auto-save Project to Local Storage
+watch(() => projectState, (state) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }, { deep: true });
 
 // Auto-save toolbar open state
@@ -256,7 +335,35 @@ watch(() => store.isToolbarOpen, (newVal) => {
   localStorage.setItem('bd-paneling-toolbar-open', JSON.stringify(newVal));
 });
 
-// Actions
+// Project / Episode Management Actions
+export function addEpisode(title = `第${projectState.episodes.length + 1}話`) {
+  const newEp = createEmptyEpisode(title);
+  projectState.episodes.push(newEp);
+  projectState.activeEpisodeId = newEp.id;
+}
+
+export function renameEpisode(id, newTitle) {
+  const ep = projectState.episodes.find(e => e.id === id);
+  if (ep) {
+    ep.title = newTitle;
+  }
+}
+
+export function deleteEpisode(id) {
+  if (projectState.episodes.length <= 1) {
+    alert("最後のエピソードは削除できません。");
+    return;
+  }
+  const index = projectState.episodes.findIndex(e => e.id === id);
+  if (index !== -1) {
+    projectState.episodes.splice(index, 1);
+    if (projectState.activeEpisodeId === id) {
+      projectState.activeEpisodeId = projectState.episodes[Math.max(0, index - 1)].id;
+    }
+  }
+}
+
+// Page actions affecting the active episode
 export function addPage() {
   store.pages.push(createEmptyPage('3x4'));
 }
@@ -264,7 +371,6 @@ export function addPage() {
 export function deletePage(index) {
   if (store.pages.length > 1) {
     store.pages.splice(index, 1);
-    // Rough calculation to prevent out of bounds after deletion
     const maxSpread = Math.ceil(store.pages.length / 2);
     if (store.currentSpreadIndex >= maxSpread) {
       store.currentSpreadIndex = Math.max(0, maxSpread - 1);
@@ -294,13 +400,11 @@ export function insertRow(pageIndex, insertRowIndex) {
   const [oldCols] = page.gridType.split('x').map(Number);
   const oldRowCols = [...page.rowCols];
 
-  // Insert a column count for the new row (copy the closest row's columns, or 3)
   const defaultCols = insertRowIndex > 1 ? page.rowCols[insertRowIndex - 2] : 3;
   page.rowCols.splice(insertRowIndex - 1, 0, defaultCols);
 
   rebuildGridWithRowCols(page, oldCols, oldRowCols, insertRowIndex);
 
-  // Add new empty panels for the inserted row (which has defaultCols columns)
   const newCols = lcmArray(page.rowCols);
   const newW = newCols / defaultCols;
   for (let col = 1; col <= defaultCols; col++) {
@@ -331,24 +435,19 @@ export function canAddColumnToRow(pageIndex, rowIndex) {
   const [cols] = page.gridType.split('x').map(Number);
   const C = page.rowCols[rowIndex - 1];
 
-  // Find all panels that touch this row
   const rowPanels = page.panels.filter(p => {
     const coords = p.cells.map(c => Math.ceil(c / cols));
     return coords.includes(rowIndex);
   });
 
-  // Rule 1: No panels in this row must span multiple rows
   const spansMultipleRows = rowPanels.some(p => {
     const rows = p.cells.map(c => Math.ceil(c / cols));
     return Math.min(...rows) !== Math.max(...rows);
   });
   if (spansMultipleRows) return false;
 
-  // Rule 2: All panels in this row must have exactly the default width (cols / C)
   const expectedWidth = cols / C;
-  const allDefaultWidth = rowPanels.every(p => p.cells.length === expectedWidth);
-
-  return allDefaultWidth;
+  return rowPanels.every(p => p.cells.length === expectedWidth);
 }
 
 // Add a column to a specific row (tier) dynamically
@@ -368,12 +467,10 @@ export function addColumnToRow(pageIndex, rowIndex) {
   const [oldCols] = page.gridType.split('x').map(Number);
   const oldRowCols = [...page.rowCols];
 
-  // Increment the column count of rowIndex
   page.rowCols[rowIndex - 1] += 1;
 
   rebuildGridWithRowCols(page, oldCols, oldRowCols);
 
-  // Add the new empty panel for the new column (located at index C_new)
   const newCols = lcmArray(page.rowCols);
   const C_new = page.rowCols[rowIndex - 1];
   const newW = newCols / C_new;
@@ -401,7 +498,6 @@ export function deleteRow(pageIndex, rowIndex) {
     page.rowCols = Array(rows).fill(cols);
   }
 
-  // A page must have at least 1 row
   if (page.rowCols.length <= 1) {
     alert("これ以上段を削除することはできません。");
     return;
@@ -410,7 +506,6 @@ export function deleteRow(pageIndex, rowIndex) {
   const [oldCols] = page.gridType.split('x').map(Number);
   const oldRowCols = [...page.rowCols];
 
-  // Remove the row column count
   page.rowCols.splice(rowIndex - 1, 1);
 
   rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, rowIndex);
@@ -424,7 +519,7 @@ function rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, deleteRowIndex)
     const uniqueKeys = new Set();
     panel.cells.forEach(c => {
       const r = Math.ceil(c / oldCols);
-      if (r === deleteRowIndex) return; // Discard cells on the deleted row
+      if (r === deleteRowIndex) return;
       
       const col = ((c - 1) % oldCols) + 1;
       const C_r = oldRowCols[r - 1];
@@ -439,9 +534,7 @@ function rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, deleteRowIndex)
       const r = parseInt(rStr, 10);
       const localCol = parseInt(cStr, 10);
       
-      // Shift row index up if it was below the deleted row
       const new_r = r > deleteRowIndex ? r - 1 : r;
-      
       const C_new = page.rowCols[new_r - 1];
       const newW = newCols / C_new;
       
@@ -455,7 +548,6 @@ function rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, deleteRowIndex)
     panel.cells = newCells;
   });
   
-  // Remove panels that have no cells left
   page.panels = page.panels.filter(p => p.cells.length > 0);
   page.gridType = `${newCols}x${page.rowCols.length}`;
 }
@@ -475,15 +567,12 @@ export function deletePanel(pageIndex, panelId) {
     page.rowCols = Array(r).fill(c);
   }
 
-  // Find rows and local columns occupied by this panel
   const oldCols = cols;
   const oldRowCols = [...page.rowCols];
 
-  // For safety, let's identify the dominant row and local columns spans
   const cellRows = panel.cells.map(c => Math.ceil(c / oldCols));
-  const targetRow = cellRows[0]; // Assume single row for simplicity
+  const targetRow = cellRows[0];
   
-  // Find local column span of this panel in targetRow
   const C_r = oldRowCols[targetRow - 1];
   const oldW = oldCols / C_r;
   const cellsInRow = panel.cells.filter(c => Math.ceil(c / oldCols) === targetRow);
@@ -493,13 +582,11 @@ export function deletePanel(pageIndex, panelId) {
   const colEnd = Math.max(...localCols) + 1;
   const span = colEnd - colStart;
 
-  // If this panel occupies the entire row, we can just delete the whole row!
   if (C_r === span) {
     deleteRow(pageIndex, targetRow);
     return;
   }
 
-  // Otherwise, decrease the column count in targetRow
   page.rowCols[targetRow - 1] -= span;
 
   rebuildGridWithPanelDelete(page, oldCols, oldRowCols, targetRow, colStart, colEnd);
@@ -521,7 +608,6 @@ function rebuildGridWithPanelDelete(page, oldCols, oldRowCols, targetRow, colSta
       
       if (r === targetRow) {
         if (localCol >= colStart && localCol < colEnd) {
-          // This cell belongs to the deleted panel, discard it
           return;
         }
         const newLocalCol = localCol >= colEnd ? localCol - span : localCol;
@@ -550,7 +636,6 @@ function rebuildGridWithPanelDelete(page, oldCols, oldRowCols, targetRow, colSta
     panel.cells = newCells;
   });
   
-  // Remove panels that have no cells left
   page.panels = page.panels.filter(p => p.cells.length > 0);
   page.gridType = `${newCols}x${page.rowCols.length}`;
 }
@@ -560,24 +645,48 @@ export function importJson(file) {
   reader.onload = (e) => {
     try {
       const parsed = JSON.parse(e.target.result);
-      if (parsed.pages && parsed.pages[0] && parsed.pages[0].panels) {
-        store.pages = parsed.pages;
-        store.currentSpreadIndex = parsed.currentSpreadIndex || 0;
-        store.firstPageIsSingle = parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true;
-        store.rowGap = parsed.rowGap || 12;
-        store.colGap = parsed.colGap || 6;
-        // Populate rowCols for imported pages if missing
-        store.pages.forEach(p => {
+      if (parsed.episodes && parsed.episodes.length > 0) {
+        // Modern format
+        projectState.projectTitle = parsed.projectTitle || 'マイ・プロジェクト';
+        projectState.episodes = parsed.episodes;
+        projectState.activeEpisodeId = parsed.activeEpisodeId || parsed.episodes[0].id;
+        
+        projectState.episodes.forEach(ep => {
+          ep.pages.forEach(p => {
+            if (!p.rowCols) {
+              const [cols, rows] = p.gridType.split('x').map(Number);
+              p.rowCols = Array(rows).fill(cols);
+            }
+          });
+        });
+      } else if (parsed.pages && parsed.pages.length > 0) {
+        // Old single-episode format migration
+        const migratedEpisode = {
+          id: crypto.randomUUID(),
+          title: "エピソード 1",
+          pages: parsed.pages,
+          currentSpreadIndex: parsed.currentSpreadIndex || 0,
+          currentPageIndex: parsed.currentPageIndex || 0,
+          firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true,
+          rowGap: parsed.rowGap || 12,
+          colGap: parsed.colGap || 6
+        };
+        
+        migratedEpisode.pages.forEach(p => {
           if (!p.rowCols) {
             const [cols, rows] = p.gridType.split('x').map(Number);
             p.rowCols = Array(rows).fill(cols);
           }
         });
+
+        projectState.projectTitle = 'マイ・プロジェクト';
+        projectState.episodes = [migratedEpisode];
+        projectState.activeEpisodeId = migratedEpisode.id;
       } else {
-        alert("Invalid file format.");
+        alert("インポートに失敗しました。正しいJSONファイルではありません。");
       }
     } catch (err) {
-      alert("Failed to read JSON file.");
+      alert("JSONファイルの読み込みに失敗しました。");
       console.error(err);
     }
   };
@@ -585,10 +694,10 @@ export function importJson(file) {
 }
 
 export function exportJson() {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(store));
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectState));
   const downloadAnchorNode = document.createElement('a');
   downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", "bd-script.json");
+  downloadAnchorNode.setAttribute("download", `${projectState.projectTitle || 'bd-project'}.json`);
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
@@ -598,7 +707,7 @@ export function exportFountain() {
   const dataStr = "data:text/markdown;charset=utf-8," + encodeURIComponent(store.fountainOutput);
   const downloadAnchorNode = document.createElement('a');
   downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", "bd-script.md");
+  downloadAnchorNode.setAttribute("download", `${activeEpisode.value?.title || 'bd-script'}.md`);
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
@@ -621,7 +730,6 @@ export function mergeSelectedPanels() {
   
   const cols = parseInt(page.gridType.split('x')[0], 10);
   
-  // Rule check: All rows involved in cross-row merging must have identical column counts
   if (!page.rowCols) {
     const [c, r] = page.gridType.split('x').map(Number);
     page.rowCols = Array(r).fill(c);
@@ -642,7 +750,6 @@ export function mergeSelectedPanels() {
     return;
   }
 
-  // Calculate bounding box of all selected cells
   const getAllCoords = (panels) => panels.flatMap(p => p.cells.map(c => ({
     r: Math.ceil(c / cols),
     c: ((c - 1) % cols) + 1
@@ -661,13 +768,11 @@ export function mergeSelectedPanels() {
     }
   }
 
-  // Find panels completely enclosed but NOT selected (these become insets)
   const insetPanels = page.panels.filter(p => 
     !selectedIdsArray.includes(p.id) && 
     p.cells.every(cell => targetCells.includes(cell))
   );
 
-  // Find panels to absorb (selected ones, or any overlapping ones that aren't saved as insets)
   const panelsToAbsorb = page.panels.filter(p => 
     selectedIdsArray.includes(p.id) || 
     (p.cells.some(cell => targetCells.includes(cell)) && !insetPanels.includes(p))
@@ -676,13 +781,9 @@ export function mergeSelectedPanels() {
   panelsToAbsorb.sort((a, b) => Math.min(...a.cells) - Math.min(...b.cells));
   const combinedText = panelsToAbsorb.map(p => p.text).filter(t => t.trim() !== '').join('\n\n');
 
-  // Remove absorbed panels
   page.panels = page.panels.filter(p => !panelsToAbsorb.includes(p));
-  
-  // Mark enclosed unselected panels as insets
   insetPanels.forEach(p => p.isInset = true);
 
-  // Create new merged panel
   page.panels.push({
     id: crypto.randomUUID(),
     text: combinedText,
@@ -711,7 +812,6 @@ export function splitPanel(pageIndex, panelId) {
 
   page.panels.splice(panelIndex, 1);
 
-  // Break back into original column width blocks
   for (let i = 0; i < panel.cells.length; i += W) {
     const chunk = panel.cells.slice(i, i + W);
     page.panels.push({

@@ -1,9 +1,49 @@
 <template>
   <div class="menu-bar">
     <div class="menu-container">
-      <!-- Left: Title Section -->
+      <!-- Left: Title & Episode Selector Section -->
       <div class="menu-logo-section">
-        <span class="menu-title">BDパネリング</span>
+        <span class="menu-title-brand">BDパネリング</span>
+        <span class="brand-divider">/</span>
+        <input 
+          type="text" 
+          v-model="store.projectTitle" 
+          class="project-title-input" 
+          title="プロジェクト名を変更" 
+          placeholder="無題のプロジェクト" 
+        />
+        
+        <span class="brand-divider">/</span>
+        
+        <div class="episode-selector-wrapper">
+          <select v-model="store.activeEpisodeId" class="episode-select" title="エピソードを選択">
+            <option v-for="ep in store.episodes" :key="ep.id" :value="ep.id">
+              {{ ep.title }}
+            </option>
+          </select>
+          <button @click="addNewEpisode" class="episode-icon-btn" title="エピソードを追加">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button @click="promptRenameEpisode" class="episode-icon-btn" title="エピソード名を変更">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="16 3 21 8 8 21 3 21 3 16 16 3"></polygon>
+            </svg>
+          </button>
+          <button 
+            @click="removeEpisode" 
+            class="episode-icon-btn delete-btn" 
+            :disabled="store.episodes.length <= 1" 
+            title="エピソードを削除"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Center: Page Navigation -->
@@ -79,16 +119,16 @@
 
         <!-- JSON/Markdown Actions (Desktop only) -->
         <div class="menu-group actions-group hide-tablet-mobile">
-          <button @click="exportFountain" class="menu-btn" title="Markdownを出力">
+          <button @click="exportFountain" class="menu-btn" title="エピソード脚本 (Markdown) を出力">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="12" y1="18" x2="12" y2="12"></line>
               <line x1="9" y1="15" x2="15" y2="15"></line>
             </svg>
-            <span class="btn-label">Markdown出力</span>
+            <span class="btn-label">脚本出力</span>
           </button>
-          <button @click="exportJson" class="menu-btn" title="データを保存">
+          <button @click="exportJson" class="menu-btn" title="プロジェクト全体を保存">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
@@ -96,7 +136,7 @@
             </svg>
             <span class="btn-label">保存 (.json)</span>
           </button>
-          <button @click="triggerFileInput" class="menu-btn" title="データを読み込む">
+          <button @click="triggerFileInput" class="menu-btn" title="プロジェクト全体を読み込み">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="17 8 12 3 7 8"></polyline>
@@ -168,7 +208,7 @@
             <line x1="12" y1="18" x2="12" y2="12"></line>
             <line x1="9" y1="15" x2="15" y2="15"></line>
           </svg>
-          <span>Markdown出力</span>
+          <span>エピソード脚本 (.md) 出力</span>
         </button>
         <button @click="handleMobileAction(exportJson)" class="mobile-menu-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -194,8 +234,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { store, exportJson, exportFountain, importJson, undo, redo, historyState } from '../store'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { 
+  store, 
+  exportJson, 
+  exportFountain, 
+  importJson, 
+  undo, 
+  redo, 
+  historyState,
+  addEpisode,
+  renameEpisode,
+  deleteEpisode
+} from '../store'
 
 const props = defineProps({
   isSidebarOpen: { type: Boolean, default: false }
@@ -322,6 +373,38 @@ const handleMobileAction = (actionFn) => {
   actionFn()
   isMobileMenuOpen.value = false
 }
+
+// Episode Actions
+const addNewEpisode = () => {
+  const title = prompt("新しいエピソードの名前を入力してください:", `第${store.episodes.length + 1}話`);
+  if (title && title.trim() !== "") {
+    addEpisode(title.trim());
+  }
+};
+
+const promptRenameEpisode = () => {
+  const currentEp = store.episodes.find(e => e.id === store.activeEpisodeId);
+  if (!currentEp) return;
+  const newTitle = prompt("エピソード名を変更:", currentEp.title);
+  if (newTitle && newTitle.trim() !== "") {
+    renameEpisode(store.activeEpisodeId, newTitle.trim());
+  }
+};
+
+const removeEpisode = () => {
+  const currentEp = store.episodes.find(e => e.id === store.activeEpisodeId);
+  if (!currentEp) return;
+  if (confirm(`エピソード「${currentEp.title}」を削除しますか？\n（このエピソードのすべてのページとコマが削除されます）`)) {
+    deleteEpisode(store.activeEpisodeId);
+  }
+};
+</script>
+
+<script>
+// Prevent name clashes
+export default {
+  name: 'Toolbar'
+}
 </script>
 
 <style scoped>
@@ -343,7 +426,7 @@ const handleMobileAction = (actionFn) => {
 .menu-container {
   width: 100%;
   max-width: 100%;
-  padding: 0 1.5rem;
+  padding: 0 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -352,17 +435,98 @@ const handleMobileAction = (actionFn) => {
 .menu-logo-section {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
-.menu-title {
-  font-size: 1.2rem;
-  font-weight: 700;
+.menu-title-brand {
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--text-main);
   letter-spacing: 0.05em;
   background: linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   user-select: none;
+  white-space: nowrap;
+}
+
+.brand-divider {
+  color: var(--border-color);
+  font-size: 1.1rem;
+  font-weight: 300;
+  user-select: none;
+}
+
+.project-title-input {
+  background: transparent;
+  border: none;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  width: 140px;
+  outline: none;
+  transition: background 0.2s ease;
+}
+
+.project-title-input:hover, .project-title-input:focus {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.episode-selector-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.episode-select {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  max-width: 130px;
+  padding-right: 0.5rem;
+}
+
+.episode-select option {
+  background: #1e1e1e;
+  color: var(--text-main);
+}
+
+.episode-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.episode-icon-btn:hover:not(:disabled) {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.episode-icon-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.episode-icon-btn.delete-btn:hover {
+  color: #ff4a4a;
+  background: rgba(255, 74, 74, 0.1);
 }
 
 .menu-navigation {
@@ -428,7 +592,7 @@ const handleMobileAction = (actionFn) => {
 
 .menu-btn {
   background: transparent;
-  border: 1px solid transparent; /* Prevent layout shift on active state */
+  border: 1px solid transparent;
   cursor: pointer;
   padding: 0.5rem 0.75rem;
   font-size: 0.95rem;
@@ -575,10 +739,16 @@ const handleMobileAction = (actionFn) => {
 
 /* Responsive Rules */
 
-/* Hide logo and nav label on very small screens to fit center pagination */
-@media (max-width: 480px) {
-  .menu-title {
-    display: none;
+/* Hide brand info and project name to make room for episode select on mobile */
+@media (max-width: 900px) {
+  .project-title-input, .brand-divider:nth-child(2) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .menu-title-brand, .brand-divider {
+    display: none !important;
   }
 }
 
@@ -589,7 +759,7 @@ const handleMobileAction = (actionFn) => {
   }
   
   .hamburger-btn {
-    display: flex; /* Hamburger contains Markdown, Save, Load */
+    display: flex;
   }
 }
 
@@ -600,15 +770,11 @@ const handleMobileAction = (actionFn) => {
   }
   
   .menu-container {
-    padding: 0 1rem;
-  }
-  
-  .menu-title {
-    font-size: 1.1rem;
+    padding: 0 0.5rem;
   }
   
   .btn-label {
-    display: none; /* Hide labels for Undo/Redo to only show icons */
+    display: none;
   }
   
   .menu-btn {
