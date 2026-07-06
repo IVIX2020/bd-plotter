@@ -71,7 +71,7 @@ h1, h2, h3, button, input, textarea {
   height: 100%;
   align-items: center;
   justify-content: center;
-  gap: 0; /* Pages should touch in the middle like a real book */
+  gap: 0.5rem; /* Shorter/narrower gap between pages in the spread */
   max-width: 95vw;
 }
 
@@ -89,34 +89,6 @@ h1, h2, h3, button, input, textarea {
 }
 .right-page {
   justify-content: flex-start;
-}
-
-.nav-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 1rem;
-  z-index: 150;
-  opacity: 0.3;
-  transition: opacity 0.2s ease, color 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.nav-arrow:hover {
-  opacity: 1;
-  color: var(--text-main);
-  background: transparent;
-}
-.prev-arrow {
-  left: 10rem; /* Give space for the timeline sidebar */
-}
-.next-arrow {
-  right: 2rem;
 }
 
 /* Floating Toolbar replaced by top screen-wide menu bar */

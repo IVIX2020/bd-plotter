@@ -32,15 +32,17 @@
       </div>
     </div>
 
-    <div class="canvas-wrapper">
+    <div class="canvas-wrapper" :class="positionType">
       <!-- Actual page canvas for panels -->
       <div 
         class="page-canvas" 
         :style="{ 
-          rowGap: store.rowGap + 'px', 
-          columnGap: store.colGap + 'px',
-          gridTemplateColumns: `repeat(${colsCount}, 1fr)`,
-          gridTemplateRows: `repeat(${rowsCount}, 1fr)`
+          '--row-gap': store.rowGap + 'px', 
+          '--col-gap': store.colGap + 'px',
+          rowGap: '0px', 
+          columnGap: '0px',
+          gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))`
         }"
       >
         <Panel 
@@ -52,8 +54,26 @@
           :pageIndex="pageIndex"
         />
 
-        <div class="merge-action" v-if="showMergeButton">
-          <button @click.stop="mergeSelectedPanels">結合する</button>
+        <div class="canvas-actions-overlay" v-if="showMergeButton || showSinglePanelActions">
+          <button v-if="showMergeButton" @click.stop="mergeSelectedPanels" class="action-btn merge-btn">結合する</button>
+          
+          <template v-if="showSinglePanelActions">
+            <button v-if="isSelectedPanelMerged" @click.stop="splitSelectedPanel" class="action-btn split-action-btn" title="結合を解除する">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="12" y1="3" x2="12" y2="21"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+              </svg>
+              結合解除
+            </button>
+            <button v-else @click.stop="deleteSelectedPanel" class="action-btn delete-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              コマを削除
+            </button>
+          </template>
         </div>
       </div>
 
@@ -61,13 +81,13 @@
       <div 
         class="canvas-overlay"
         :style="{ 
-          rowGap: store.rowGap + 'px', 
-          columnGap: store.colGap + 'px',
-          gridTemplateColumns: `repeat(${colsCount}, 1fr)`,
-          gridTemplateRows: `repeat(${rowsCount}, 1fr)`
+          rowGap: '0px', 
+          columnGap: '0px',
+          gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))`
         }"
       >
-        <!-- Floating Row Insertion Indicators (on the left) -->
+        <!-- Floating Row Insertion Indicators (on the left gaps) -->
         <div 
           v-for="i in (rowsCount + 1)" 
           :key="'insert-' + i" 
@@ -90,7 +110,29 @@
           <div class="row-insert-line"></div>
         </div>
 
-        <!-- Floating Column Addition Indicators (on the right) -->
+        <!-- Floating Row Deletion Indicators (on the left row centers) -->
+        <div 
+          v-if="rowsCount > 1"
+          v-for="r in rowsCount" 
+          :key="'row-del-' + r" 
+          class="row-delete-indicator"
+          :style="{ 
+            gridColumn: '1 / -1',
+            gridRow: `${r} / ${r}`
+          }"
+        >
+          <button 
+            class="row-delete-btn" 
+            @click.stop="onDeleteRow(r)" 
+            title="この段を削除"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Floating Column Addition Indicators (on the right row centers) -->
         <div 
           v-for="r in rowsCount" 
           :key="'col-add-' + r" 
@@ -119,11 +161,12 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue'
-import { store, selectionState, mergeSelectedPanels, insertRow, canAddColumnToRow, addColumnToRow } from '../store'
+import { store, selectionState, mergeSelectedPanels, insertRow, canAddColumnToRow, addColumnToRow, deleteRow, deletePanel, splitPanel } from '../store'
 import Panel from './Panel.vue'
 
 const props = defineProps({
-  pageIndex: { type: Number, required: true }
+  pageIndex: { type: Number, required: true },
+  positionType: { type: String, default: 'single' } // 'left', 'right', 'single'
 })
 
 const page = computed(() => store.pages[props.pageIndex])
@@ -140,6 +183,12 @@ const rowsCount = computed(() => {
 
 const onInsertRow = (insertRowIndex) => {
   insertRow(props.pageIndex, insertRowIndex);
+}
+
+const onDeleteRow = (rowIndex) => {
+  if (confirm("この段と含まれるコマを削除しますか？")) {
+    deleteRow(props.pageIndex, rowIndex);
+  }
 }
 
 const canAddColumn = (rowIndex) => {
@@ -196,6 +245,42 @@ const showMergeButton = computed(() => {
   return !selectionState.isSelecting && selectionState.selectedIds.size > 1 && selectionState.pageIndex === props.pageIndex;
 })
 
+const showSinglePanelActions = computed(() => {
+  return !selectionState.isSelecting && selectionState.selectedIds.size === 1 && selectionState.pageIndex === props.pageIndex;
+})
+
+const deleteSelectedPanel = () => {
+  const panelId = Array.from(selectionState.selectedIds)[0];
+  if (!panelId) return;
+
+  if (confirm("選択したコマを削除しますか？\n（段の列数が減るか、最後のコマの場合は段自体が削除されます）")) {
+    deletePanel(props.pageIndex, panelId);
+    selectionState.selectedIds.clear();
+  }
+}
+
+const isSelectedPanelMerged = computed(() => {
+  if (selectionState.selectedIds.size !== 1) return false;
+  const panelId = Array.from(selectionState.selectedIds)[0];
+  const panel = page.value.panels.find(p => p.id === panelId);
+  if (!panel) return false;
+
+  const cols = colsCount.value;
+  const row = Math.ceil(panel.cells[0] / cols);
+  const C_row = page.value.rowCols[row - 1];
+  const baseW = cols / C_row;
+  
+  return panel.cells.length > baseW;
+});
+
+const splitSelectedPanel = () => {
+  const panelId = Array.from(selectionState.selectedIds)[0];
+  if (!panelId) return;
+
+  splitPanel(props.pageIndex, panelId);
+  selectionState.selectedIds.clear();
+}
+
 const onGlobalMouseUp = () => {
   if (selectionState.isSelecting) {
     selectionState.isSelecting = false;
@@ -217,7 +302,7 @@ const clearSelection = (e) => {
   // Prevent click-to-clear immediately after finishing a multi-panel drag
   if (Date.now() - selectionState.lastDragEndTime < 100) return;
 
-  if (!e.target.closest('.panel') && !e.target.closest('.merge-action')) {
+  if (!e.target.closest('.panel') && !e.target.closest('.canvas-actions-overlay')) {
     selectionState.selectedIds.clear();
   }
 }
@@ -236,6 +321,16 @@ const clearSelection = (e) => {
   align-items: center;
 }
 
+/* Align canvases adjacent in spread layout */
+.canvas-wrapper.left {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.canvas-wrapper.right {
+  justify-content: flex-start;
+  margin-right: auto;
+}
+
 .page-canvas {
   width: 100%;
   height: 100%;
@@ -245,6 +340,9 @@ const clearSelection = (e) => {
   transition: gap 0.3s ease;
   border-radius: 0;
   border: none;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Mirrored overlay container */
@@ -258,6 +356,8 @@ const clearSelection = (e) => {
   display: grid;
   pointer-events: none; /* Make overlay 100% click-through */
   z-index: 100;
+  min-width: 0;
+  min-height: 0;
 }
 
 .row-insert-indicator {
@@ -280,7 +380,7 @@ const clearSelection = (e) => {
 
 .row-insert-btn {
   position: absolute;
-  left: -28px; /* Position button right outside the grid boundary */
+  left: 8px; /* Position button inside the grid boundary to avoid gutter overlaps */
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -316,6 +416,50 @@ const clearSelection = (e) => {
   opacity: 0.7;
 }
 
+/* Row deletion indicators */
+.row-delete-indicator {
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.canvas-wrapper:hover .row-delete-indicator {
+  opacity: 0.35;
+}
+
+.row-delete-indicator:hover {
+  opacity: 1 !important;
+}
+
+.row-delete-btn {
+  position: absolute;
+  left: 8px; /* Position button inside the grid boundary to avoid gutter overlaps */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #d93838; /* Alert red */
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
+  pointer-events: auto;
+}
+
+.row-delete-btn:hover {
+  transform: scale(1.25);
+  background: #c02828;
+  box-shadow: 0 0 10px rgba(217, 56, 56, 0.6);
+}
+
 /* Column additions styles */
 .col-add-indicator {
   height: 100%;
@@ -338,7 +482,7 @@ const clearSelection = (e) => {
 
 .col-add-btn {
   position: absolute;
-  right: -28px; /* Position button right outside the grid boundary */
+  right: 8px; /* Position button inside the grid boundary to avoid gutter overlaps */
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -361,23 +505,48 @@ const clearSelection = (e) => {
   box-shadow: 0 0 10px rgba(140, 136, 240, 0.6);
 }
 
-.merge-action {
+/* Floating Actions Overlay */
+.canvas-actions-overlay {
   position: absolute;
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 200;
+  display: flex;
+  gap: 0.5rem;
 }
-.merge-action button {
-  background: var(--accent);
+.action-btn {
   color: #fff;
   font-weight: bold;
-  padding: 0.8rem 2rem;
+  padding: 0.8rem 1.5rem;
   border-radius: 30px;
   box-shadow: var(--shadow-lg);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.merge-action button:hover {
+.merge-btn {
+  background: var(--accent);
+}
+.merge-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+.delete-btn {
+  background: #d93838;
+}
+.delete-btn:hover {
+  background: #c02828;
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(217, 56, 56, 0.4);
+}
+.split-action-btn {
+  background: var(--accent);
+}
+.split-action-btn:hover {
   background: var(--accent-hover);
   transform: scale(1.05);
 }

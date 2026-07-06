@@ -6,6 +6,21 @@
         <span class="menu-title">BDパネリング</span>
       </div>
 
+      <!-- Center: Page Navigation -->
+      <div class="menu-navigation">
+        <button @click="prevPage" class="nav-btn" :disabled="isPrevDisabled" title="前のページ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span class="nav-pages-label">{{ pageLabel }}</span>
+        <button @click="nextPage" class="nav-btn" :disabled="isNextDisabled" title="次のページ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+
       <!-- Right: Main Actions Row -->
       <div class="menu-actions-row">
         <!-- Undo/Redo: Always visible for quick editing access -->
@@ -179,7 +194,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { store, exportJson, exportFountain, importJson, undo, redo, historyState } from '../store'
 
 const props = defineProps({
@@ -189,9 +204,102 @@ const props = defineProps({
 const emit = defineEmits(['toggle-sidebar'])
 const fileInput = ref(null)
 const isMobileMenuOpen = ref(false)
+const isMobileView = ref(false)
 
 const canUndo = computed(() => historyState.currentIndex > 0)
 const canRedo = computed(() => historyState.currentIndex < historyState.history.length - 1)
+
+const checkMobile = () => {
+  isMobileView.value = window.innerWidth < 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+
+const maxSpreadIndex = computed(() => {
+  const numPages = store.pages.length;
+  if (numPages === 0) return 0;
+  if (store.firstPageIsSingle) {
+    return Math.ceil((numPages - 1) / 2);
+  } else {
+    return Math.ceil(numPages / 2) - 1;
+  }
+});
+
+const pageLabel = computed(() => {
+  const numPages = store.pages.length;
+  if (numPages === 0) return 'P. --';
+  
+  if (isMobileView.value) {
+    return `P. ${store.currentPageIndex + 1} / ${numPages}`;
+  } else {
+    const spreadIndex = store.currentSpreadIndex;
+    let leftIdx = -1;
+    let rightIdx = -1;
+
+    if (store.firstPageIsSingle) {
+      if (spreadIndex === 0) {
+        rightIdx = 0;
+      } else {
+        leftIdx = spreadIndex * 2 - 1;
+        rightIdx = spreadIndex * 2;
+      }
+    } else {
+      leftIdx = spreadIndex * 2;
+      rightIdx = spreadIndex * 2 + 1;
+    }
+
+    const leftLabel = leftIdx >= 0 && leftIdx < numPages ? `${leftIdx + 1}` : '';
+    const rightLabel = rightIdx >= 0 && rightIdx < numPages ? `${rightIdx + 1}` : '';
+    
+    if (leftLabel && rightLabel) {
+      return `P. ${leftLabel} - ${rightLabel} / ${numPages}`;
+    } else if (leftLabel) {
+      return `P. ${leftLabel} / ${numPages}`;
+    } else if (rightLabel) {
+      return `P. ${rightLabel} / ${numPages}`;
+    }
+    return 'P. --';
+  }
+});
+
+const prevPage = () => {
+  if (isMobileView.value) {
+    if (store.currentPageIndex > 0) store.currentPageIndex--;
+  } else {
+    if (store.currentSpreadIndex > 0) store.currentSpreadIndex--;
+  }
+};
+
+const nextPage = () => {
+  if (isMobileView.value) {
+    if (store.currentPageIndex < store.pages.length - 1) store.currentPageIndex++;
+  } else {
+    if (store.currentSpreadIndex < maxSpreadIndex.value) store.currentSpreadIndex++;
+  }
+};
+
+const isPrevDisabled = computed(() => {
+  if (isMobileView.value) {
+    return store.currentPageIndex === 0;
+  } else {
+    return store.currentSpreadIndex === 0;
+  }
+});
+
+const isNextDisabled = computed(() => {
+  if (isMobileView.value) {
+    return store.currentPageIndex === store.pages.length - 1;
+  } else {
+    return store.currentSpreadIndex === maxSpreadIndex.value;
+  }
+});
 
 const triggerFileInput = () => {
   fileInput.value.click()
@@ -254,6 +362,48 @@ const handleMobileAction = (actionFn) => {
   background: linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  user-select: none;
+}
+
+.menu-navigation {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent);
+}
+
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.nav-pages-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 90px;
+  text-align: center;
   user-select: none;
 }
 
@@ -424,6 +574,13 @@ const handleMobileAction = (actionFn) => {
 }
 
 /* Responsive Rules */
+
+/* Hide logo and nav label on very small screens to fit center pagination */
+@media (max-width: 480px) {
+  .menu-title {
+    display: none;
+  }
+}
 
 /* Tablet Mode (width < 1024px) */
 @media (max-width: 1023px) {

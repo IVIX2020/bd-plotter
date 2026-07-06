@@ -4,7 +4,7 @@
     :class="{ 'is-editing': isEditing, 'is-selected': isSelected, 'is-inset': panel.isInset }"
     @mousedown.left="startSelection"
     @mouseenter="onEnter"
-    @mouseup.left="onMouseUp"
+    @dblclick.stop="startEditing"
     :style="gridStyle"
   >
     <span class="panel-num" v-if="!isEditing">{{ index + 1 }}</span>
@@ -101,13 +101,6 @@ const onEnter = () => {
   }
 }
 
-const onMouseUp = () => {
-  if (selectionState.selectedIds.size === 1 && selectionState.selectedIds.has(props.panel.id)) {
-    selectionState.selectedIds.clear();
-    startEditing();
-  }
-}
-
 const onSplit = () => {
   splitPanel(props.pageIndex, props.panel.id);
 }
@@ -133,16 +126,20 @@ const stopEditing = () => {
   border: 2px solid var(--text-main);
   border-radius: 2px 255px 3px 25px / 255px 5px 225px 3px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start; /* top align content */
+  justify-content: flex-start; /* left align content */
   position: relative;
   background: transparent;
   transition: all 0.2s ease;
   cursor: pointer;
   overflow: hidden;
   min-height: 0;
+  min-width: 0; /* Enable panel shrinking inside tight grid layouts */
   user-select: none;
   -webkit-user-select: none;
+  padding: 26px 12px 12px 12px; /* Pad top to clear panel number label and split button */
+  box-sizing: border-box; /* Maintain clean bounds calculations */
+  margin: calc(var(--row-gap, 12px) / 2) calc(var(--col-gap, 6px) / 2); /* Create layout gaps using margins to avoid CSS Grid track expansion */
 }
 .panel:hover {
   background: rgba(255,255,255,0.03);
@@ -193,11 +190,11 @@ const stopEditing = () => {
 }
 
 .panel-input {
-  width: 90%;
-  height: 90%;
+  width: 100%;
+  height: 100%;
   border: none;
   background: transparent;
-  text-align: center;
+  text-align: left; /* left align edit text */
   font-size: 0.85rem;
   resize: none;
   outline: none;
@@ -207,13 +204,13 @@ const stopEditing = () => {
 }
 
 .panel-preview {
-  width: 90%;
-  height: 90%;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+  justify-content: flex-start; /* top align blocks */
+  align-items: flex-start; /* left align blocks */
+  text-align: left; /* left align text */
   gap: 8px;
   font-size: 0.85rem;
   overflow-y: auto;
@@ -229,7 +226,7 @@ const stopEditing = () => {
   color: var(--text-main);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start; /* left align character metadata */
 }
 .char-name {
   font-size: 0.75rem;

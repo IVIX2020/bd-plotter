@@ -92,8 +92,8 @@ const getGridStyle = (pageIndex) => {
   const [cols, rows] = page.gridType.split('x').map(Number);
   return {
     display: 'grid',
-    gridTemplateColumns: `repeat(${cols}, 1fr)`,
-    gridTemplateRows: `repeat(${rows}, 1fr)`,
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+    gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
     gap: '1px'
   }
 }

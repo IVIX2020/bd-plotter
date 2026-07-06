@@ -131,7 +131,32 @@ export const store = reactive({
   ...initialState,
   fountainOutput: '',
   isToolbarOpen: initialToolbarOpen,
-  isTimelineOpen: false
+  isTimelineOpen: false,
+  currentPageIndex: 0 // Track single page index for mobile view
+});
+
+// Bidirectional synchronization between currentSpreadIndex and currentPageIndex
+watch(() => store.currentSpreadIndex, (newSpreadIdx) => {
+  let expected;
+  if (store.firstPageIsSingle) {
+    expected = newSpreadIdx === 0 ? 0 : newSpreadIdx * 2 - 1;
+  } else {
+    expected = newSpreadIdx * 2;
+  }
+  if (store.currentPageIndex !== expected) {
+    store.currentPageIndex = expected;
+  }
+});
+watch(() => store.currentPageIndex, (newPageIdx) => {
+  let expected;
+  if (store.firstPageIsSingle) {
+    expected = newPageIdx === 0 ? 0 : Math.floor((newPageIdx - 1) / 2) + 1;
+  } else {
+    expected = Math.floor(newPageIdx / 2);
+  }
+  if (store.currentSpreadIndex !== expected) {
+    store.currentSpreadIndex = expected;
+  }
 });
 
 // History state for Undo/Redo
@@ -364,6 +389,170 @@ export function addColumnToRow(pageIndex, rowIndex) {
     cells: newCells,
     isInset: false
   });
+}
+
+// Delete a specific row (tier)
+export function deleteRow(pageIndex, rowIndex) {
+  const page = store.pages[pageIndex];
+  if (!page) return;
+
+  if (!page.rowCols) {
+    const [cols, rows] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(rows).fill(cols);
+  }
+
+  // A page must have at least 1 row
+  if (page.rowCols.length <= 1) {
+    alert("これ以上段を削除することはできません。");
+    return;
+  }
+
+  const [oldCols] = page.gridType.split('x').map(Number);
+  const oldRowCols = [...page.rowCols];
+
+  // Remove the row column count
+  page.rowCols.splice(rowIndex - 1, 1);
+
+  rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, rowIndex);
+}
+
+// Rebuild grid helper for row deletion
+function rebuildGridWithRowColsDelete(page, oldCols, oldRowCols, deleteRowIndex) {
+  const newCols = lcmArray(page.rowCols);
+  
+  page.panels.forEach(panel => {
+    const uniqueKeys = new Set();
+    panel.cells.forEach(c => {
+      const r = Math.ceil(c / oldCols);
+      if (r === deleteRowIndex) return; // Discard cells on the deleted row
+      
+      const col = ((c - 1) % oldCols) + 1;
+      const C_r = oldRowCols[r - 1];
+      const oldW = oldCols / C_r;
+      const localCol = Math.floor((col - 1) / oldW) + 1;
+      uniqueKeys.add(`${r}_${localCol}`);
+    });
+    
+    const newCells = [];
+    uniqueKeys.forEach(key => {
+      const [rStr, cStr] = key.split('_');
+      const r = parseInt(rStr, 10);
+      const localCol = parseInt(cStr, 10);
+      
+      // Shift row index up if it was below the deleted row
+      const new_r = r > deleteRowIndex ? r - 1 : r;
+      
+      const C_new = page.rowCols[new_r - 1];
+      const newW = newCols / C_new;
+      
+      for (let k = 1; k <= newW; k++) {
+        const cellId = (new_r - 1) * newCols + (localCol - 1) * newW + k;
+        newCells.push(cellId);
+      }
+    });
+    
+    newCells.sort((a, b) => a - b);
+    panel.cells = newCells;
+  });
+  
+  // Remove panels that have no cells left
+  page.panels = page.panels.filter(p => p.cells.length > 0);
+  page.gridType = `${newCols}x${page.rowCols.length}`;
+}
+
+// Delete a specific panel
+export function deletePanel(pageIndex, panelId) {
+  const page = store.pages[pageIndex];
+  if (!page) return;
+
+  const panelIndex = page.panels.findIndex(p => p.id === panelId);
+  if (panelIndex === -1) return;
+
+  const panel = page.panels[panelIndex];
+  const [cols] = page.gridType.split('x').map(Number);
+  if (!page.rowCols) {
+    const [c, r] = page.gridType.split('x').map(Number);
+    page.rowCols = Array(r).fill(c);
+  }
+
+  // Find rows and local columns occupied by this panel
+  const oldCols = cols;
+  const oldRowCols = [...page.rowCols];
+
+  // For safety, let's identify the dominant row and local columns spans
+  const cellRows = panel.cells.map(c => Math.ceil(c / oldCols));
+  const targetRow = cellRows[0]; // Assume single row for simplicity
+  
+  // Find local column span of this panel in targetRow
+  const C_r = oldRowCols[targetRow - 1];
+  const oldW = oldCols / C_r;
+  const cellsInRow = panel.cells.filter(c => Math.ceil(c / oldCols) === targetRow);
+  const globalCols = cellsInRow.map(c => ((c - 1) % oldCols) + 1);
+  const localCols = globalCols.map(c => Math.floor((c - 1) / oldW) + 1);
+  const colStart = Math.min(...localCols);
+  const colEnd = Math.max(...localCols) + 1;
+  const span = colEnd - colStart;
+
+  // If this panel occupies the entire row, we can just delete the whole row!
+  if (C_r === span) {
+    deleteRow(pageIndex, targetRow);
+    return;
+  }
+
+  // Otherwise, decrease the column count in targetRow
+  page.rowCols[targetRow - 1] -= span;
+
+  rebuildGridWithPanelDelete(page, oldCols, oldRowCols, targetRow, colStart, colEnd);
+}
+
+// Rebuild grid helper for panel deletion
+function rebuildGridWithPanelDelete(page, oldCols, oldRowCols, targetRow, colStart, colEnd) {
+  const span = colEnd - colStart;
+  const newCols = lcmArray(page.rowCols);
+  
+  page.panels.forEach(panel => {
+    const uniqueKeys = new Set();
+    panel.cells.forEach(c => {
+      const r = Math.ceil(c / oldCols);
+      const col = ((c - 1) % oldCols) + 1;
+      const C_r = oldRowCols[r - 1];
+      const oldW = oldCols / C_r;
+      const localCol = Math.floor((col - 1) / oldW) + 1;
+      
+      if (r === targetRow) {
+        if (localCol >= colStart && localCol < colEnd) {
+          // This cell belongs to the deleted panel, discard it
+          return;
+        }
+        const newLocalCol = localCol >= colEnd ? localCol - span : localCol;
+        uniqueKeys.add(`${r}_${newLocalCol}`);
+      } else {
+        uniqueKeys.add(`${r}_${localCol}`);
+      }
+    });
+    
+    const newCells = [];
+    uniqueKeys.forEach(key => {
+      const [rStr, cStr] = key.split('_');
+      const r = parseInt(rStr, 10);
+      const localCol = parseInt(cStr, 10);
+      
+      const C_new = page.rowCols[r - 1];
+      const newW = newCols / C_new;
+      
+      for (let k = 1; k <= newW; k++) {
+        const cellId = (r - 1) * newCols + (localCol - 1) * newW + k;
+        newCells.push(cellId);
+      }
+    });
+    
+    newCells.sort((a, b) => a - b);
+    panel.cells = newCells;
+  });
+  
+  // Remove panels that have no cells left
+  page.panels = page.panels.filter(p => p.cells.length > 0);
+  page.gridType = `${newCols}x${page.rowCols.length}`;
 }
 
 export function importJson(file) {
