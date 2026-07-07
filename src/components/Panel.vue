@@ -54,8 +54,26 @@
     
     <div v-else class="panel-preview">
       <div v-for="(block, i) in parsedPreview" :key="i" :class="'block-' + block.type">
-        <div v-if="block.type === 'dialogue-other'" class="char-name">@{{ block.name }}</div>
-        <div class="content-text">{{ block.content }}</div>
+        <!-- Spoken Dialogue -->
+        <template v-if="block.type === 'dialogue'">
+          <div class="dialogue-line">
+            <span class="char-name">👤 {{ block.name }}</span>
+            <span class="content-text">「{{ block.content }}」</span>
+          </div>
+        </template>
+        
+        <!-- Monologue -->
+        <template v-else-if="block.type === 'monologue'">
+          <div class="dialogue-line">
+            <span class="char-name monologue-char">🧠 {{ block.name }} (独白)</span>
+            <span class="content-text monologue-text">（{{ block.content }}）</span>
+          </div>
+        </template>
+        
+        <!-- Action (Situation description) -->
+        <template v-else-if="block.type === 'action'">
+          <div class="action-text">{{ block.content }}</div>
+        </template>
       </div>
     </div>
   </div>
@@ -70,7 +88,8 @@ const props = defineProps({
   panel: { type: Object, required: true },
   index: { type: Number, required: true },
   gridType: { type: String, required: true },
-  pageIndex: { type: Number, required: true }
+  pageIndex: { type: Number, required: true },
+  previewBlocks: { type: Array, default: () => [] }
 })
 
 const isEditing = ref(false)
@@ -78,7 +97,9 @@ const localText = ref(props.panel.text)
 const textareaRef = ref(null)
 
 const parsedPreview = computed(() => {
-  return parsePanelText(props.panel.text).preview
+  return props.previewBlocks && props.previewBlocks.length > 0
+    ? props.previewBlocks
+    : parsePanelText(props.panel.text).preview
 })
 
 const isSelected = computed(() => selectionState.selectedIds.has(props.panel.id))
@@ -340,29 +361,56 @@ const getPlotTitle = (color) => {
   user-select: none;
 }
 
-.block-dialogue-protag {
-  font-weight: bold;
-  color: var(--text-main);
-}
-.block-dialogue-other {
-  font-weight: normal;
-  color: var(--text-main);
+.block-dialogue {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
-.char-name {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 2px;
+.block-monologue {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .block-action {
-  font-size: 0.75rem;
-  color: #666666;
-  font-style: italic;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
-.content-text {
+
+.action-text {
+  font-size: 0.75rem;
+  color: #888888;
   white-space: pre-wrap;
   line-height: 1.4;
+}
+
+.dialogue-line {
+  width: 100%;
+  line-height: 1.4;
+}
+
+.char-name {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--accent);
+  margin-right: 6px;
+  display: inline;
+}
+.monologue-char {
+  color: #a78bfa;
+}
+.monologue-text {
+  color: #d8b4fe;
+  font-style: italic;
+}
+
+.content-text {
+  display: inline;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  color: var(--text-main);
 }
 </style>

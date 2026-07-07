@@ -46,12 +46,13 @@
         }"
       >
         <Panel 
-          v-for="(panel, idx) in sortedPanels" 
-          :key="panel.id" 
-          :panel="panel" 
+          v-for="(item, idx) in parsedPanelsData" 
+          :key="item.panel.id" 
+          :panel="item.panel" 
           :index="idx"
           :gridType="page.gridType"
           :pageIndex="pageIndex"
+          :previewBlocks="item.preview"
         />
 
         <div class="canvas-actions-overlay" v-if="showMergeButton || showSinglePanelActions">
@@ -163,6 +164,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { store, selectionState, mergeSelectedPanels, insertRow, canAddColumnToRow, addColumnToRow, deleteRow, deletePanel, splitPanel } from '../store'
 import Panel from './Panel.vue'
+import { sortPanels, parsePanelText } from '../utils/fountain'
 
 const props = defineProps({
   pageIndex: { type: Number, required: true },
@@ -211,33 +213,20 @@ const togglePlotColor = (color) => {
 
 const sortedPanels = computed(() => {
   if (!page.value) return [];
-  const cols = colsCount.value;
-  
-  return [...page.value.panels].sort((a, b) => {
-    // For BD style (Left-to-Right), find the Top-Left most cell
-    const getPos = (panel) => {
-      let minY = Infinity;
-      let minX = Infinity;
-      const cells = panel.cells || [1];
-      cells.forEach(c => {
-        const y = Math.ceil(c / cols);
-        const x = ((c - 1) % cols) + 1;
-        if (y < minY) {
-          minY = y;
-          minX = x;
-        } else if (y === minY && x < minX) {
-          minX = x;
-        }
-      });
-      return { x: minX, y: minY };
+  return sortPanels(page.value.panels, page.value.gridType);
+})
+
+const parsedPanelsData = computed(() => {
+  if (!page.value) return [];
+  let lastSpeaker = "CHARACTER";
+  const sorted = sortedPanels.value;
+  return sorted.map(panel => {
+    const parsed = parsePanelText(panel.text, lastSpeaker);
+    lastSpeaker = parsed.lastSpeaker;
+    return {
+      panel,
+      preview: parsed.preview
     };
-    
-    const posA = getPos(a);
-    const posB = getPos(b);
-    
-    if (posA.y !== posB.y) return posA.y - posB.y; // Top to bottom
-    if (posA.x !== posB.x) return posA.x - posB.x; // Left to right
-    return (a.isInset === b.isInset) ? 0 : a.isInset ? 1 : -1;
   });
 })
 
