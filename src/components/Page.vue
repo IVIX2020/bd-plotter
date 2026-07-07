@@ -162,7 +162,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue'
-import { store, selectionState, mergeSelectedPanels, insertRow, canAddColumnToRow, addColumnToRow, deleteRow, deletePanel, splitPanel } from '../store'
+import { store, activeEpisode, selectionState, mergeSelectedPanels, insertRow, canAddColumnToRow, addColumnToRow, deleteRow, deletePanel, splitPanel } from '../store'
 import Panel from './Panel.vue'
 import { sortPanels, parsePanelText } from '../utils/fountain'
 
@@ -220,12 +220,35 @@ const parsedPanelsData = computed(() => {
   if (!page.value) return [];
   let lastSpeaker = "CHARACTER";
   const sorted = sortedPanels.value;
+  const metadata = activeEpisode.value?.metadata || {};
+  const protagonistNameOriginal = (metadata.protagonist?.name || '').trim();
+  const protagonistName = protagonistNameOriginal.toLowerCase();
+  const keyPersonName = (metadata.keyPerson?.name || '').trim().toLowerCase();
+
   return sorted.map(panel => {
-    const parsed = parsePanelText(panel.text, lastSpeaker);
+    const parsed = parsePanelText(panel.text, lastSpeaker, protagonistNameOriginal);
     lastSpeaker = parsed.lastSpeaker;
+    
+    const previewWithColors = parsed.preview.map(block => {
+      if (block.type === 'dialogue' || block.type === 'monologue') {
+        const speakerName = (block.name || '').trim().toLowerCase();
+        let customColor = null;
+        if (protagonistName && speakerName === protagonistName) {
+          customColor = metadata.protagonist?.color || null;
+        } else if (keyPersonName && speakerName === keyPersonName) {
+          customColor = metadata.keyPerson?.color || null;
+        }
+        return {
+          ...block,
+          customColor
+        };
+      }
+      return block;
+    });
+
     return {
       panel,
-      preview: parsed.preview
+      preview: previewWithColors
     };
   });
 })

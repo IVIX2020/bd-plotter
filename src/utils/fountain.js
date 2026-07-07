@@ -1,4 +1,4 @@
-export function parsePanelText(text, lastSpeaker = "CHARACTER") {
+export function parsePanelText(text, lastSpeaker = "CHARACTER", protagonistName = "主人公") {
   if (!text) return { fountain: '', preview: [], lastSpeaker };
 
   // Split by single newlines to allow natural line-by-line dialogue writing
@@ -24,15 +24,18 @@ export function parsePanelText(text, lastSpeaker = "CHARACTER") {
       const name = (monologueMatch[1] || '').trim();
       const content = (monologueMatch[2] || monologueMatch[3] || '').trim();
       
-      if (name) {
-        currentSpeaker = name;
+      let speaker = name;
+      if (!speaker) {
+        speaker = protagonistName || "主人公";
+      } else {
+        currentSpeaker = speaker;
       }
       
       // Fountain outputs voice-over monologue as @SPEAKER (V.O.)
-      fountainLines.push(`@${currentSpeaker} (V.O.)\n${content}\n`);
+      fountainLines.push(`@${speaker} (V.O.)\n${content}\n`);
       previewLines.push({
         type: 'monologue',
-        name: currentSpeaker,
+        name: speaker,
         content: content
       });
     }
@@ -177,7 +180,7 @@ export function sortPanels(panels, gridType) {
   return sorted.map(x => x.panel);
 }
 
-export function generateFountainDocument(pages) {
+export function generateFountainDocument(pages, protagonistName = "主人公") {
   let doc = "";
   let lastSpeaker = "CHARACTER";
   
@@ -198,7 +201,7 @@ export function generateFountainDocument(pages) {
       if (!panel.text.trim()) return;
       
       doc += `### Panel ${pIndex + 1}\n\n`;
-      const parsed = parsePanelText(panel.text, lastSpeaker);
+      const parsed = parsePanelText(panel.text, lastSpeaker, protagonistName);
       lastSpeaker = parsed.lastSpeaker; // carry speaker name forward
       doc += parsed.fountain + "\n";
     });

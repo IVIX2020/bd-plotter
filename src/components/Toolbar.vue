@@ -24,12 +24,8 @@
           
           <!-- Unified Episode Actions Menu -->
           <div class="episode-menu-container">
-            <button @click="toggleEpisodeMenu" class="episode-icon-btn menu-trigger-btn" title="エピソード管理">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#888888">
-                <circle cx="12" cy="12" r="2"></circle>
-                <circle cx="12" cy="5" r="2"></circle>
-                <circle cx="12" cy="19" r="2"></circle>
-              </svg>
+            <button @click="toggleEpisodeMenu" class="episode-text-btn menu-trigger-btn" title="エピソード管理">
+              EP管理
             </button>
             <div v-if="isEpisodeMenuOpen" class="episode-context-menu" @click.stop>
               <!-- Page Start Position Toggle -->
@@ -41,6 +37,28 @@
                 <span>扉絵から始める (1P目を右)</span>
               </button>
               
+              <!-- Episode Settings Modal Trigger -->
+              <button @click="openEpisodeSettings" class="context-menu-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <span>エピソード設定</span>
+              </button>
+
+              <!-- Episode Reorder Modal Trigger -->
+              <button @click="openEpisodeReorder" class="context-menu-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <polyline points="3 8 6 5 9 8"></polyline>
+                  <polyline points="3 16 6 19 9 16"></polyline>
+                  <line x1="6" y1="5" x2="6" y2="19"></line>
+                </svg>
+                <span>エピソードの並び替え</span>
+              </button>
+              
               <div class="context-menu-divider"></div>
 
               <button @click="addNewEpisode" class="context-menu-item">
@@ -48,22 +66,19 @@
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                エピソードを追加
+                <span>エピソードを追加</span>
               </button>
+              
               <button @click="duplicateActiveEpisode" class="context-menu-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
-                エピソードを複製
+                <span>エピソードを複製</span>
               </button>
-              <button @click="promptRenameEpisode" class="context-menu-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="16 3 21 8 8 21 3 21 3 16 16 3"></polygon>
-                </svg>
-                エピソード名の変更
-              </button>
+              
               <div class="context-menu-divider"></div>
+              
               <button 
                 @click="removeEpisode" 
                 class="context-menu-item delete-item" 
@@ -73,7 +88,7 @@
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
-                エピソードを削除
+                <span>エピソードを削除</span>
               </button>
             </div>
           </div>
@@ -199,6 +214,105 @@
     </div>
 
     <input type="file" ref="fileInput" @change="onFileChange" accept=".json" style="display: none;" />
+
+    <!-- Episode Settings Modal -->
+    <div v-if="isSettingsModalOpen" class="modal-overlay" @click="isSettingsModalOpen = false">
+      <div class="modal-card" @click.stop>
+        <div class="modal-header">
+          <h3>エピソード設定 ({{ activeEpisode.title }})</h3>
+          <button class="modal-close-btn" @click="isSettingsModalOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">エピソード名</label>
+            <input type="text" v-model="activeEpisode.title" class="form-input-text" placeholder="エピソードのタイトル" />
+          </div>
+          
+          <div class="form-section-title">登場人物の設定</div>
+          
+          <div class="form-row">
+            <div class="form-col">
+              <label class="form-label">主人公 (Protagonist)</label>
+              <input type="text" v-model="activeEpisode.metadata.protagonist.name" class="form-input-text" placeholder="名前 (例: アレン)" />
+              <div class="color-picker-label">表示色</div>
+              <div class="color-picker-row">
+                <button 
+                  v-for="color in colorOptions" 
+                  :key="'proto-' + color.value"
+                  class="color-picker-btn" 
+                  :style="{ backgroundColor: color.value }"
+                  :class="{ active: activeEpisode.metadata.protagonist.color === color.value }"
+                  @click="activeEpisode.metadata.protagonist.color = color.value"
+                  :title="color.label"
+                ></button>
+                <button class="color-clear-btn" @click="activeEpisode.metadata.protagonist.color = ''" title="色をクリア">✕</button>
+              </div>
+            </div>
+            
+            <div class="form-col">
+              <label class="form-label">キーパーソン (Key Person)</label>
+              <input type="text" v-model="activeEpisode.metadata.keyPerson.name" class="form-input-text" placeholder="名前 (例: シズク)" />
+              <div class="color-picker-label">表示色</div>
+              <div class="color-picker-row">
+                <button 
+                  v-for="color in colorOptions" 
+                  :key="'key-' + color.value"
+                  class="color-picker-btn" 
+                  :style="{ backgroundColor: color.value }"
+                  :class="{ active: activeEpisode.metadata.keyPerson.color === color.value }"
+                  @click="activeEpisode.metadata.keyPerson.color = color.value"
+                  :title="color.label"
+                ></button>
+                <button class="color-clear-btn" @click="activeEpisode.metadata.keyPerson.color = ''" title="色をクリア">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-save-btn" @click="isSettingsModalOpen = false">保存して閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Episode Reorder Modal -->
+    <div v-if="isReorderModalOpen" class="modal-overlay" @click="isReorderModalOpen = false">
+      <div class="modal-card mini-card" @click.stop>
+        <div class="modal-header">
+          <h3>エピソードの並び替え</h3>
+          <button class="modal-close-btn" @click="isReorderModalOpen = false">✕</button>
+        </div>
+        <div class="modal-body scroll-body">
+          <p class="modal-desc-text">エピソードの順序を上下の矢印ボタンで変更できます。</p>
+          <div class="reorder-list">
+            <div 
+              v-for="(ep, idx) in store.episodes" 
+              :key="ep.id" 
+              class="reorder-item"
+              :class="{ 'is-active-ep': ep.id === store.activeEpisodeId }"
+            >
+              <span class="reorder-title">{{ idx + 1 }}. {{ ep.title }}</span>
+              <div class="reorder-actions">
+                <button 
+                  class="reorder-btn" 
+                  @click="moveEpisode(idx, -1)" 
+                  :disabled="idx === 0" 
+                  title="上に移動"
+                >▲</button>
+                <button 
+                  class="reorder-btn" 
+                  @click="moveEpisode(idx, 1)" 
+                  :disabled="idx === store.episodes.length - 1" 
+                  title="下に移動"
+                >▼</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-save-btn" @click="isReorderModalOpen = false">閉じる</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -206,6 +320,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { 
   store, 
+  activeEpisode,
   exportJson, 
   exportFountain, 
   importJson, 
@@ -213,11 +328,11 @@ import {
   redo, 
   historyState,
   addEpisode,
-  renameEpisode,
   deleteEpisode,
   addPage,
   resetProject,
-  duplicateEpisode
+  duplicateEpisode,
+  moveEpisode
 } from '../store'
 
 const props = defineProps({
@@ -229,6 +344,22 @@ const fileInput = ref(null)
 const isMobileMenuOpen = ref(false)
 const isMobileView = ref(false)
 const isEpisodeMenuOpen = ref(false)
+
+const openEpisodeSettings = () => {
+  if (activeEpisode.value && !activeEpisode.value.metadata) {
+    activeEpisode.value.metadata = {
+      protagonist: { name: '', color: '' },
+      keyPerson: { name: '', color: '' }
+    }
+  }
+  store.isSettingsModalOpen = true
+  isEpisodeMenuOpen.value = false
+}
+
+const openEpisodeReorder = () => {
+  store.isReorderModalOpen = true
+  isEpisodeMenuOpen.value = false
+}
 
 const canUndo = computed(() => historyState.currentIndex > 0)
 const canRedo = computed(() => historyState.currentIndex < historyState.history.length - 1)
@@ -407,16 +538,7 @@ const duplicateActiveEpisode = (e) => {
   duplicateEpisode(store.activeEpisodeId);
 };
 
-const promptRenameEpisode = (e) => {
-  e?.stopPropagation();
-  closeEpisodeMenu();
-  const currentEp = store.episodes.find(e => e.id === store.activeEpisodeId);
-  if (!currentEp) return;
-  const newTitle = prompt("エピソード名を変更:", currentEp.title);
-  if (newTitle && newTitle.trim() !== "") {
-    renameEpisode(store.activeEpisodeId, newTitle.trim());
-  }
-};
+// promptRenameEpisode deleted since renaming is handled in the Episode Settings Modal
 
 const removeEpisode = (e) => {
   e?.stopPropagation();
@@ -629,51 +751,34 @@ export default {
   stroke: var(--accent-hover, #a29eff);
 }
 
-/* 3-dots trigger button design with solid fill circles */
-.episode-icon-btn.menu-trigger-btn svg {
-  fill: var(--text-muted, #888888);
-  stroke: none !important;
-  transition: fill 0.15s ease;
-}
-
-.episode-icon-btn.menu-trigger-btn:hover svg {
-  fill: var(--text-main, #ffffff) !important;
-}
-
-.episode-icon-btn {
-  background: transparent;
-  border: none;
+/* Text button trigger for Episode Management */
+.episode-text-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   border-radius: 4px;
   transition: all 0.2s ease;
-  flex-shrink: 0; /* Prevent button from shrinking to 0 width */
+  flex-shrink: 0;
+  height: 24px;
+  line-height: 1;
 }
 
-.episode-icon-btn svg {
-  stroke: var(--text-muted, #888888);
-  transition: stroke 0.15s ease;
-}
-
-.episode-icon-btn:hover:not(:disabled) {
+.episode-text-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  border-color: var(--text-muted);
 }
 
-.episode-icon-btn:hover:not(:disabled) svg {
-  stroke: var(--text-main, #ffffff);
-}
-
-.episode-icon-btn:disabled {
+.episode-text-btn:disabled {
   opacity: 0.25;
   cursor: not-allowed;
-}
-
-.episode-icon-btn:disabled svg {
-  stroke: var(--border-color) !important;
 }
 
 /* Center pagination styling */

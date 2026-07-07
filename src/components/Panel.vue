@@ -19,7 +19,6 @@
     <!-- Panel Plot Color Dots (Top Right, shifts dynamically if split button is present) -->
     <div 
       class="panel-plot-dots" 
-      :class="{ 'has-active-color': panel.plotColor }" 
       v-if="!isEditing"
       :style="{ right: canSplit ? '36px' : '8px' }"
     >
@@ -57,7 +56,7 @@
         <!-- Spoken Dialogue -->
         <template v-if="block.type === 'dialogue'">
           <div class="dialogue-line">
-            <span class="char-name">👤 {{ block.name }}</span>
+            <span class="char-name" :style="block.customColor ? { color: block.customColor } : {}">👤 {{ block.name }}</span>
             <span class="content-text">「{{ block.content }}」</span>
           </div>
         </template>
@@ -65,7 +64,7 @@
         <!-- Monologue -->
         <template v-else-if="block.type === 'monologue'">
           <div class="dialogue-line">
-            <span class="char-name monologue-char">🧠 {{ block.name }} (独白)</span>
+            <span class="char-name monologue-char" :style="block.customColor ? { color: block.customColor } : {}">🧠 {{ block.name }} (独白)</span>
             <span class="content-text monologue-text">（{{ block.content }}）</span>
           </div>
         </template>
@@ -267,7 +266,7 @@ const getPlotTitle = (color) => {
   transition: opacity 0.2s ease;
   z-index: 15;
 }
-.panel:hover .panel-plot-dots, .panel-plot-dots.has-active-color {
+.panel:hover .panel-plot-dots {
   opacity: 1;
 }
 

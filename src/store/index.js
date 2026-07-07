@@ -101,7 +101,11 @@ function createEmptyEpisode(title = "エピソード 1", pageCount = 4) {
     currentPageIndex: 0,
     firstPageIsSingle: true,
     rowGap: 12,
-    colGap: 6
+    colGap: 6,
+    metadata: {
+      protagonist: { name: '', color: '' },
+      keyPerson: { name: '', color: '' }
+    }
   };
 }
 
@@ -128,8 +132,14 @@ if (savedState) {
         activeEpisodeId: parsed.activeEpisodeId || parsed.episodes[0].id
       };
       
-      // Populate rowCols for loaded pages if missing
+      // Populate rowCols and metadata for loaded pages if missing
       initialProjectState.episodes.forEach(ep => {
+        if (!ep.metadata) {
+          ep.metadata = {
+            protagonist: { name: '', color: '' },
+            keyPerson: { name: '', color: '' }
+          };
+        }
         ep.pages.forEach(p => {
           if (!p.rowCols) {
             const [cols, rows] = p.gridType.split('x').map(Number);
@@ -147,7 +157,11 @@ if (savedState) {
         currentPageIndex: parsed.currentPageIndex || 0,
         firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true,
         rowGap: parsed.rowGap || 12,
-        colGap: parsed.colGap || 6
+        colGap: parsed.colGap || 6,
+        metadata: {
+          protagonist: { name: '', color: '' },
+          keyPerson: { name: '', color: '' }
+        }
       };
       
       migratedEpisode.pages.forEach(p => {
@@ -195,6 +209,10 @@ export const store = reactive({
     get: () => projectState.activeEpisodeId,
     set: (val) => { projectState.activeEpisodeId = val; }
   }),
+  metadata: computed({
+    get: () => activeEpisode.value?.metadata || { protagonist: { name: '', color: '' }, keyPerson: { name: '', color: '' } },
+    set: (val) => { if (activeEpisode.value) activeEpisode.value.metadata = val; }
+  }),
 
   // Episode-level proxy properties (auto-unwrapped when accessed)
   pages: computed({
@@ -226,6 +244,8 @@ export const store = reactive({
   fountainOutput: '',
   isToolbarOpen: initialToolbarOpen,
   isTimelineOpen: false,
+  isSettingsModalOpen: false,
+  isReorderModalOpen: false,
 });
 
 // Bidirectional synchronization between currentSpreadIndex and currentPageIndex
@@ -325,9 +345,10 @@ watch(() => [projectState.projectTitle, projectState.episodes, projectState.acti
   }, 400);
 }, { deep: true, flush: 'sync' });
 
-// Update active episode generated markdown whenever active pages change
-watch(() => store.pages, () => {
-  store.fountainOutput = generateFountainDocument(store.pages);
+// Update active episode generated markdown whenever active pages or metadata change
+watch([() => store.pages, () => activeEpisode.value?.metadata], () => {
+  const protagonistName = (activeEpisode.value?.metadata?.protagonist?.name || '').trim();
+  store.fountainOutput = generateFountainDocument(store.pages, protagonistName);
 }, { deep: true, immediate: true });
 
 // Auto-save Project to Local Storage
@@ -408,12 +429,25 @@ export function duplicateEpisode(id) {
     currentPageIndex: ep.currentPageIndex,
     firstPageIsSingle: ep.firstPageIsSingle,
     rowGap: ep.rowGap,
-    colGap: ep.colGap
+    colGap: ep.colGap,
+    metadata: ep.metadata ? JSON.parse(JSON.stringify(ep.metadata)) : {
+      protagonist: { name: '', color: '' },
+      keyPerson: { name: '', color: '' }
+    }
   };
 
   const index = projectState.episodes.findIndex(e => e.id === id);
   projectState.episodes.splice(index + 1, 0, newEp);
   projectState.activeEpisodeId = newEp.id;
+}
+
+export function moveEpisode(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex >= 0 && newIndex < projectState.episodes.length) {
+    const temp = projectState.episodes[index];
+    projectState.episodes[index] = projectState.episodes[newIndex];
+    projectState.episodes[newIndex] = temp;
+  }
 }
 
 // Page actions affecting the active episode
@@ -714,6 +748,21 @@ export function importJson(file) {
             }
           });
         });
+        // Populate rowCols and metadata for loaded pages if missing
+        projectState.episodes.forEach(ep => {
+          if (!ep.metadata) {
+            ep.metadata = {
+              protagonist: { name: '', color: '' },
+              keyPerson: { name: '', color: '' }
+            };
+          }
+          ep.pages.forEach(p => {
+            if (!p.rowCols) {
+              const [cols, rows] = p.gridType.split('x').map(Number);
+              p.rowCols = Array(rows).fill(cols);
+            }
+          });
+        });
       } else if (parsed.pages && parsed.pages.length > 0) {
         // Old single-episode format migration
         const migratedEpisode = {
@@ -724,7 +773,11 @@ export function importJson(file) {
           currentPageIndex: parsed.currentPageIndex || 0,
           firstPageIsSingle: parsed.firstPageIsSingle !== undefined ? parsed.firstPageIsSingle : true,
           rowGap: parsed.rowGap || 12,
-          colGap: parsed.colGap || 6
+          colGap: parsed.colGap || 6,
+          metadata: {
+            protagonist: { name: '', color: '' },
+            keyPerson: { name: '', color: '' }
+          }
         };
         
         migratedEpisode.pages.forEach(p => {
