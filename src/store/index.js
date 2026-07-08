@@ -455,6 +455,10 @@ export function addPage() {
   store.pages.push(createEmptyPage('3x4'));
 }
 
+export function insertPage(index) {
+  store.pages.splice(index, 0, createEmptyPage('3x4'));
+}
+
 export function deletePage(index) {
   if (store.pages.length > 1) {
     store.pages.splice(index, 1);

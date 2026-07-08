@@ -58,6 +58,7 @@
           >
             <div class="page-actions" v-if="hoveredPage === pRef.index">
               <button class="action-btn" @click.stop="movePage(pRef.index, -1)" :disabled="pRef.index === 0" title="上に移動">▲</button>
+              <button class="action-btn" @click.stop="insertPage(pRef.index)" title="ここに空ページを挿入">＋</button>
               <button class="action-btn delete-btn" @click.stop="deletePage(pRef.index)" title="削除">×</button>
               <button class="action-btn" @click.stop="movePage(pRef.index, 1)" :disabled="pRef.index === store.pages.length - 1" title="下に移動">▼</button>
             </div>
@@ -95,7 +96,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { store, deletePage, movePage, addPage } from '../store'
+import { store, deletePage, movePage, addPage, insertPage } from '../store'
 
 const hoveredPage = ref(null)
 
@@ -407,6 +408,10 @@ export default {
 .mini-panel.plot-pink {
   background: #f472b6 !important;
   border-color: #ec4899 !important;
+}
+.mini-panel.plot-purple {
+  background: #c084fc !important;
+  border-color: #a855f7 !important;
 }
 
 .thumb-num {

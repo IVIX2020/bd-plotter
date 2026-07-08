@@ -1,14 +1,14 @@
 <template>
   <div 
     class="panel"
-    :class="{ 
-      'is-editing': isEditing, 
-      'is-selected': isSelected, 
-      'is-inset': panel.isInset,
-      'plot-green': panel.plotColor === 'green',
-      'plot-yellow': panel.plotColor === 'yellow',
-      'plot-pink': panel.plotColor === 'pink'
-    }"
+    :class="[
+      { 
+        'is-editing': isEditing, 
+        'is-selected': isSelected, 
+        'is-inset': panel.isInset
+      },
+      panel.plotColor ? 'plot-' + panel.plotColor : ''
+    ]"
     @mousedown.left="startSelection"
     @mouseenter="onEnter"
     @dblclick.stop="startEditing"
@@ -23,7 +23,7 @@
       :style="{ right: canSplit ? '36px' : '8px' }"
     >
       <button 
-        v-for="color in ['green', 'yellow', 'pink']" 
+        v-for="color in ['green', 'yellow', 'pink', 'purple']" 
         :key="color"
         :class="['plot-dot', 'dot-' + color, { active: panel.plotColor === color }]"
         @mousedown.stop
@@ -177,6 +177,7 @@ const getPlotTitle = (color) => {
   if (color === 'green') return '起 (Green)';
   if (color === 'yellow') return '承・転 (Yellow)';
   if (color === 'pink') return '結 (Pink)';
+  if (color === 'purple') return '伏線 (Purple)';
   return '';
 }
 </script>
@@ -228,6 +229,14 @@ const getPlotTitle = (color) => {
 }
 .panel.plot-pink:hover {
   background: rgba(244, 114, 182, 0.08);
+}
+
+.panel.plot-purple {
+  border-color: #c084fc;
+  background: rgba(192, 132, 252, 0.04);
+}
+.panel.plot-purple:hover {
+  background: rgba(192, 132, 252, 0.08);
 }
 
 .panel.is-editing {
@@ -302,6 +311,10 @@ const getPlotTitle = (color) => {
   background-color: #f472b6;
   --dot-shadow: rgba(244, 114, 182, 0.5);
 }
+.dot-purple {
+  background-color: #c084fc;
+  --dot-shadow: rgba(192, 132, 252, 0.5);
+}
 .plot-dot.active.dot-green {
   border-color: #22c55e;
 }
@@ -310,6 +323,9 @@ const getPlotTitle = (color) => {
 }
 .plot-dot.active.dot-pink {
   border-color: #ec4899;
+}
+.plot-dot.active.dot-purple {
+  border-color: #a855f7;
 }
 
 .split-btn {
